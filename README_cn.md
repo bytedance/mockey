@@ -77,7 +77,7 @@ func TestMockXXX(t *testing.T) {
 
 ## 开源许可
 
-Mockey 基于[Apache License 2.0](https://github.com/bytedance/mockey/blob/main/LICENSE) 许可证，其依赖的三方组件的开源许可见 [Licenses](https://github.com/bytedance/mockey/blob/main/licenses)
+Mockey 基于[Apache License 2.0](https://github.com/bytedance/mockey/blob/main/LICENSE-APACHE) 许可证，其依赖的三方组件的开源许可见 [Licenses](https://github.com/bytedance/mockey/blob/main/licenses)
 
 ## FAQ
 
@@ -86,7 +86,7 @@ Mockey 基于[Apache License 2.0](https://github.com/bytedance/mockey/blob/main/
 2. Goland：在 **运行/调试配置 > Go工具实参** 对话框中填写 `-gcflags="all=-l -N"` 
 
 ### Mock 后函数后仍走入了原函数？
-1. 未禁用内联或者编译优化：可以尝试使用 debug 模式，如果能跑过则说明是该问题，请转到 FAQ [相关章节](#如何禁用内联和编译优化？)
+1. 未禁用内联或者编译优化：可以尝试使用 debug 模式，如果能跑过则说明是该问题，请转到 FAQ [相关章节](#如何禁用内联和编译优化)
 2. 未调用`Build()`方法：mock 函数时漏写了`.Build()`，导致没有任何实际效果产生
 3. 目标函数不完全匹配：
 ```go
@@ -113,7 +113,7 @@ func TestXXX(t *testing.T) {
 ```
 
 ### 报错 "function is too short to patch"？
-1. 未禁用内联或者编译优化：可以尝试使用 debug 模式，如果能跑过则说明是该问题，请转到 FAQ [相关章节](#如何禁用内联和编译优化？)
+1. 未禁用内联或者编译优化：可以尝试使用 debug 模式，如果能跑过则说明是该问题，请转到 FAQ [相关章节](#如何禁用内联和编译优化)
 2. 函数确实太短：指目标函数小于一行，导致编译后机器码太短，一般两行及以上不会有这个问题
 3. 重复 mock 同一个函数：在最小单位的`PatchConvey`中重复 mock 同一个函数，如果确实有这种需求可以尝试获取`Mocker`后重新 mock
 4. 其他工具 mock 了该函数：例如已经使用 [monkey](https://github.com/bouk/monkey) 等工具 mock 了该函数
