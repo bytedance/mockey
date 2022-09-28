@@ -2,7 +2,7 @@
 
 English | [中文](README_cn.md)
 
-Mockey is a simple and easy-to-use golang mock tool library, which can quickly and conveniently mock functions and variables. At present, it is widely used in the unit test writing of ByteDance services. The bottom layer is monkey patch realized by rewriting function instructions at runtime.
+Mockey is a simple and easy-to-use golang mock library, which can quickly and conveniently mock functions and variables. At present, it is widely used in the unit test writing of ByteDance services. The bottom layer is monkey patch realized by rewriting function instructions at runtime.
 
 > 1. **inlining and compilation optimization need to be disabled** during compilation, otherwise mock may fail or an error may be reported. See the following [FAQ](#FAQ) chapter for details.
 > 2. In the actual process of writing a unit test, it is recommended to use it together with the [Convey](https://github.com/smartystreets/goconvey) library.
@@ -77,7 +77,7 @@ func TestMockXXX(t *testing.T) {
 - Go 1.13+
 
 ## License
-Mockey is distributed under the [Apache License](https://github.com/bytedance/mockey/blob/main/LICENSE), version 2.0. The licenses of third party dependencies of Mockey are explained [here](https://github.com/bytedance/mockey/blob/main/licenses).
+Mockey is distributed under the [Apache License](https://github.com/bytedance/mockey/blob/main/LICENSE-APACHE), version 2.0. The licenses of third party dependencies of Mockey are explained [here](https://github.com/bytedance/mockey/blob/main/licenses).
 
 ## FAQ
 
@@ -86,7 +86,7 @@ Mockey is distributed under the [Apache License](https://github.com/bytedance/mo
 2. Goland：fill `-gcflags="all=-l -N"` in the **Run/Debug Configurations > Go tool arguments** dialog box
 
 ### The original function is still entered after mocking?
-1. Inline or compilation optimization is not disabled: you can try to use the debug mode. If you can run through it, it means that it is the problem. Please go to the [relevant section](#How to disable inline and compile optimization?) of FAQ
+1. Inline or compilation optimization is not disabled: you can try to use the debug mode. If you can run through it, it means that it is the problem. Please go to the [relevant section](#how-to-disable-inline-and-compile-optimization) of FAQ
 3. The `Build()` method was not called: forgot to call `Build()`, resulting in no actual effect
 4. Target function does not match exactly:
 ```go
@@ -113,7 +113,7 @@ func TestXXX(t *testing.T) {
 ```
 
 ### Error "function is too short to patch"？
-1. Inline or compilation optimization is not disabled: you can try to use the debug mode. If you can run through it, it means that it is the problem. Please go to the [relevant section](#How to disable inline and compile optimization?) of FAQ
+1. Inline or compilation optimization is not disabled: you can try to use the debug mode. If you can run through it, it means that it is the problem. Please go to the [relevant section](#how-to-disable-inline-and-compile-optimization) of FAQ
 2. The function is really too short: it means that the target function is less than one line, resulting in the compiled machine code being too short. Generally, two or more lines will not cause this problem
 3. Repeat mocking the same function: repeat mocking the same function in the `PatchConvey` of the smallest unit. If there is such a need, please get the `Mocker` instance and remock.
 4. Other tools mock this function: for example, [monkey](https://github.com/bouk/monkey) or other tools have mocked this function
