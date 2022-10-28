@@ -82,7 +82,11 @@ func (mocker *MockerVar) UnPatch() *MockerVar {
 	defer mocker.lock.Unlock()
 	if mocker.isPatched {
 		mocker.isPatched = false
-		mocker.target.Set(reflect.ValueOf(mocker.origin))
+		if mocker.origin == nil {
+			mocker.target.Set(reflect.Zero(mocker.targetType))
+		} else {
+			mocker.target.Set(reflect.ValueOf(mocker.origin))
+		}
 		removeFromGlobal(mocker)
 	}
 
