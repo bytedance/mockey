@@ -17,6 +17,7 @@
 package mockey
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -83,5 +84,23 @@ func TestVarStruct(t *testing.T) {
 			})
 		})
 
+	})
+}
+
+func (t *testStruct) String() string {
+	return t.a
+}
+
+func TestVarStruct2(t *testing.T) {
+	Convey("test mock nil", t, func() {
+		var ttt fmt.Stringer
+		PatchConvey("test mock3", func() {
+			MockValue(&ttt).To(&testStruct{
+				a: "2",
+				b: 3,
+			})
+			So(ttt.(*testStruct).a, ShouldEqual, "2")
+		})
+		So(ttt, ShouldBeNil)
 	})
 }
