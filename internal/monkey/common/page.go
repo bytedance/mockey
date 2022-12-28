@@ -38,7 +38,7 @@ func AllocatePage() []byte {
 }
 
 func ReleasePage(mem []byte) {
-	var memStats = uint64(cap(mem))
+	memStats := uint64(cap(mem))
 	sysFree(unsafe.Pointer(PtrOf(mem)), uintptr(cap(mem)), &memStats)
 }
 

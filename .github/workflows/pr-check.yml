@@ -4,7 +4,7 @@ on: [ pull_request ]
 
 jobs:
   compliant:
-    runs-on: [ self-hosted, X64 ]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Check License Header
@@ -15,7 +15,7 @@ jobs:
         uses: crate-ci/typos@master
 
   staticcheck:
-    runs-on: [ self-hosted, X64 ]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go
@@ -41,7 +41,7 @@ jobs:
           staticcheck_flags: -checks=inherit,-SA1029
 
   lint:
-    runs-on: [ self-hosted, X64 ]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go

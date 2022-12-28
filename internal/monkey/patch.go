@@ -41,7 +41,7 @@ func (p *Patch) Unpatch() {
 
 // PatchValue replace the target function with a hook function, and stores the target function in the proxy function
 // for future restore. Target and hook are values of function. Proxy is a value of proxy function pointer.
-func PatchValue(target reflect.Value, hook reflect.Value, proxy reflect.Value) *Patch {
+func PatchValue(target, hook, proxy reflect.Value) *Patch {
 	tool.Assert(hook.Kind() == reflect.Func, "'%s' is not a function", hook.Kind())
 	tool.Assert(proxy.Kind() == reflect.Ptr, "'%v' is not a function pointer", proxy.Kind())
 	tool.Assert(hook.Type() == target.Type(), "'%v' and '%s' mismatch", hook.Type(), target.Type())
@@ -73,13 +73,13 @@ func PatchValue(target reflect.Value, hook reflect.Value, proxy reflect.Value) *
 	return &Patch{base: targetAddr, code: proxyCode, size: cuttingIdx}
 }
 
-func PatchFunc(fn interface{}, hook interface{}, proxy interface{}) *Patch {
+func PatchFunc(fn, hook, proxy interface{}) *Patch {
 	vv := reflect.ValueOf(fn)
 	tool.Assert(vv.Kind() == reflect.Func, "'%v' is not a function", fn)
 	return PatchValue(vv, reflect.ValueOf(hook), reflect.ValueOf(proxy))
 }
 
-func PatchMethod(val interface{}, method string, hook interface{}, proxy interface{}) *Patch {
+func PatchMethod(val interface{}, method string, hook, proxy interface{}) *Patch {
 	m, ok := reflect.TypeOf(val).MethodByName(method)
 	tool.Assert(ok, "unknown method '%s'", method)
 	return PatchValue(m.Func, reflect.ValueOf(hook), reflect.ValueOf(proxy))

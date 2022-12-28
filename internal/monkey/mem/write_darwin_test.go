@@ -31,7 +31,7 @@ func Test_write(t *testing.T) {
 		var a uint16 = 0x0
 		var b uint32 = 0xffffffff
 		fmt.Printf("a=%x,b=%x\n", a, b)
-		var arr = (*[4]byte)(unsafe.Pointer(&a))
+		arr := (*[4]byte)(unsafe.Pointer(&a))
 		arr[2] = 0xa5
 		fmt.Printf("a=%x,b=%x,aSlice=%x\n", a, b, arr)
 		target := uintptr(unsafe.Pointer(&a))

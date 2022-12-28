@@ -38,4 +38,4 @@ func Write(target uintptr, data []byte) error {
 
 //go:cgo_import_dynamic mach_task_self mach_task_self "/usr/lib/libSystem.B.dylib"
 //go:cgo_import_dynamic mach_vm_protect mach_vm_protect "/usr/lib/libSystem.B.dylib"
-func write(target uintptr, data uintptr, len int, page uintptr, pageSize int, oriProt int) int
+func write(target, data uintptr, len int, page uintptr, pageSize, oriProt int) int

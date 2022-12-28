@@ -35,10 +35,8 @@ func TestVarPatchConvey(t *testing.T) {
 				MockValue(&b).To(40)
 				So(b, ShouldEqual, 40)
 				So(a, ShouldEqual, 30)
-
 			})
 			So(b, ShouldEqual, 1)
-
 		})
 		So(b, ShouldEqual, 1)
 		So(a, ShouldEqual, 10)
@@ -70,7 +68,6 @@ func TestVarStruct(t *testing.T) {
 			})
 			So(ttt.a, ShouldEqual, "2")
 			PatchConvey("test mock3 a", func() {
-
 				MockValue(&ttt).To(&testStruct{
 					a: "3",
 					b: 3,
@@ -78,12 +75,10 @@ func TestVarStruct(t *testing.T) {
 				So(ttt.a, ShouldEqual, "3")
 			})
 			PatchConvey("test mock3 b", func() {
-
 				MockValue(&ttt).To(nil)
 				So(ttt, ShouldBeNil)
 			})
 		})
-
 	})
 }
 
