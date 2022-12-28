@@ -7,13 +7,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: [ self-hosted, X64 ]
     steps:
       - uses: actions/checkout@v3
-
       - name: Check Source Branch
         run: python2 -c "exit(0 if '${{ github.head_ref }}'.startswith('release') or '${{ github.head_ref }}'.startswith('hotfix') else 1)"
-
       - name: Check Version
         run: |
           # get version code, runner not support grep -E here
