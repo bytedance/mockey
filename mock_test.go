@@ -55,6 +55,8 @@ func VariantParam(a int, b ...int) (int, int) {
 	return a, b[0]
 }
 
+func ShortFun() {}
+
 func TestNoConvey(t *testing.T) {
 	origin := Fun
 	mock := func(p string) string {
@@ -308,5 +310,13 @@ func TestRePatch(t *testing.T) {
 		mock2.UnPatch()
 		mock2.UnPatch()
 		fmt.Printf("re unpatch can be run")
+	})
+}
+
+func TestMockUnsafe(t *testing.T) {
+	Convey("TestMockUnsafe", t, func() {
+		mock := MockUnsafe(ShortFun).To(func() { panic("in hook") }).Build()
+		defer mock.UnPatch()
+		So(func() { ShortFun() }, ShouldPanicWith, "in hook")
 	})
 }

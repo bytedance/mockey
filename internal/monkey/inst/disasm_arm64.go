@@ -20,7 +20,7 @@ import (
 	"github.com/bytedance/mockey/internal/tool"
 )
 
-func Disassemble(code []byte, required int) int {
+func Disassemble(code []byte, required int, checkLen bool) int {
 	tool.Assert(len(code) > required, "function is too short to patch")
 	return required
 }

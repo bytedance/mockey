@@ -21,7 +21,7 @@ import (
 	"golang.org/x/arch/x86/x86asm"
 )
 
-func Disassemble(code []byte, required int) int {
+func Disassemble(code []byte, required int, checkLen bool) int {
 	var pos int
 	var err error
 	var inst x86asm.Inst
@@ -30,7 +30,7 @@ func Disassemble(code []byte, required int) int {
 		inst, err = x86asm.Decode(code[pos:], 64)
 		tool.Assert(err == nil, err)
 		tool.DebugPrintf("Disassemble: inst: %v\n", inst)
-		tool.Assert(inst.Op != x86asm.RET, "function is too short to patch")
+		tool.Assert(inst.Op != x86asm.RET || !checkLen, "function is too short to patch")
 		pos += inst.Len
 	}
 	return pos
