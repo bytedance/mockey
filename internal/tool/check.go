@@ -32,7 +32,7 @@ func CheckReturnType(fn interface{}, results ...interface{}) {
 	}
 }
 
-func CheckFuncArgs(a reflect.Type, b reflect.Type, shift int) bool {
+func CheckFuncArgs(a, b reflect.Type, shift int) bool {
 	if a.NumIn() == b.NumIn()+shift {
 		for i := shift; i < a.NumIn(); i++ {
 			if a.In(i) != b.In(i-shift) {

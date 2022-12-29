@@ -31,8 +31,7 @@ func Fun(a string) string {
 	return a
 }
 
-type Class struct {
-}
+type Class struct{}
 
 func (*Class) FunA(a string) string {
 	fmt.Println(a)
@@ -72,7 +71,6 @@ func TestNoConvey(t *testing.T) {
 }
 
 func TestMock(t *testing.T) {
-
 	PatchConvey("test mock", t, func() {
 		PatchConvey("test to", func() {
 			origin := Fun
@@ -95,7 +93,7 @@ func TestMock(t *testing.T) {
 			So(mock3.Times(), ShouldEqual, 1)
 		})
 
-		PatchConvey("test muti_return", func() {
+		PatchConvey("test multi_return", func() {
 			mock3 := Mock(MultiReturn).Return(1, 1).Build()
 			a, b := MultiReturn()
 			So(a, ShouldEqual, 1)
@@ -103,7 +101,7 @@ func TestMock(t *testing.T) {
 			So(mock3.Times(), ShouldEqual, 1)
 		})
 
-		PatchConvey("test muti_return_err", func() {
+		PatchConvey("test multi_return_err", func() {
 			newErr := errors.New("new")
 			mock3 := Mock(MultiReturnErr).Return(1, 1, newErr).Build()
 			a, b, e := MultiReturnErr()
@@ -127,7 +125,6 @@ func TestMock(t *testing.T) {
 			So(mock4.Times(), ShouldEqual, 1)
 			So(mock4.MockTimes(), ShouldEqual, 1)
 		})
-
 	})
 }
 
@@ -155,7 +152,6 @@ func TestParam(t *testing.T) {
 			So(mock4.Times(), ShouldEqual, 1)
 			So(mock4.MockTimes(), ShouldEqual, 0)
 		})
-
 	})
 }
 
@@ -173,14 +169,12 @@ func TestClass(t *testing.T) {
 			So(str, ShouldEqual, "b")
 		})
 		PatchConvey("test class variant param mock", func() {
-
 			mock := func(self *Class, a string, b ...string) string { return b[0] }
 			m := Mock((*Class).VariantParam).When(func(self *Class, a string, b ...string) bool { return a == "a" }).To(mock).Build()
 			c := Class{}
 			str := c.VariantParam("a", "b")
 			So(m.MockTimes(), ShouldEqual, 1)
 			So(str, ShouldEqual, "b")
-
 		})
 
 		PatchConvey("test  missing receiver mock", func() {
@@ -201,19 +195,17 @@ func TestClass(t *testing.T) {
 			}
 
 			So(func() { Mock((*Class).FunA).When(func(p string) bool { return p == "a" }).To(mock).Build() }, ShouldPanic)
-
 		})
 	})
-
 }
 
 type TestImpl struct {
 	a string
 }
 
-func (self *TestImpl) A() string {
-	fmt.Println(self.a)
-	return self.a
+func (i *TestImpl) A() string {
+	fmt.Println(i.a)
+	return i.a
 }
 
 type TestI interface {
@@ -227,15 +219,12 @@ func ReturnImpl() TestI {
 func TestInterface(t *testing.T) {
 	PatchConvey("TestInterface", t, func() {
 		PatchConvey("test mock", func() {
-
 			m := Mock(ReturnImpl).Return(&TestImpl{a: "b"}).Build()
 			str := ReturnImpl().A()
 			So(m.MockTimes(), ShouldEqual, 1)
 			So(str, ShouldEqual, "b")
 		})
-
 	})
-
 }
 
 func TestFilterGoRoutine(t *testing.T) {

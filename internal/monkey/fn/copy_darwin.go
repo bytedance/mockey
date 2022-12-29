@@ -25,7 +25,7 @@ import (
 )
 
 // Copy copies the original function code to a new page, injecting the code to the target function.
-func Copy(targetPtr interface{}, oriFn interface{}) {
+func Copy(targetPtr, oriFn interface{}) {
 	targetVal := reflect.ValueOf(targetPtr)
 	tool.Assert(targetVal.Type().Kind() == reflect.Ptr, "'%v' is not a pointer", targetPtr)
 	targetType := targetVal.Type().Elem()

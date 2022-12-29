@@ -37,7 +37,7 @@ func mProtectRX(b []byte) error {
 	return MProtectRWX(common.PtrOf(b))
 }
 
-func mProtectPage(page uintptr, prot uintptr) error {
+func mProtectPage(page, prot uintptr) error {
 	var ori uint
 	return virtualProtect(page, common.PageSize(), uint32(prot), common.PtrAt(reflect.ValueOf(&ori)))
 }

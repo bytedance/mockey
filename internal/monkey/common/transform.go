@@ -33,10 +33,10 @@ func PtrAt(val reflect.Value) uintptr {
 	return uintptr((*value)(unsafe.Pointer(&val)).ptr)
 }
 
-func BytesOf(addr uintptr, size int) []byte {
-	return *(*[]byte)(unsafe.Pointer(&reflect.SliceHeader{
-		Data: addr,
-		Len:  size,
-		Cap:  size,
-	}))
+func BytesOf(addr uintptr, size int) (res []byte) {
+	h := (*reflect.SliceHeader)(unsafe.Pointer(&res))
+	h.Data = addr
+	h.Len = size
+	h.Cap = size
+	return res
 }

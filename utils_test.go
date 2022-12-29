@@ -98,9 +98,6 @@ func TestGetNestedMethod(t *testing.T) {
 }
 
 type testA struct {
-	x int
-	y string
-	z map[string]interface{}
 	testC
 }
 
@@ -127,11 +124,11 @@ func (b *testB) BarB() {}
 type testC struct{}
 
 func (s testC) FooC() {
-	_ = fmt.Sprintf("")
+	fmt.Print("")
 }
 
 func (s *testC) BarC() {
-	_ = fmt.Sprintf("")
+	fmt.Print("")
 }
 
 type testD struct {

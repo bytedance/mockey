@@ -61,7 +61,6 @@ func Mock(target interface{}) *MockBuilder {
 	return &MockBuilder{
 		target: target,
 	}
-
 }
 
 func (builder *MockBuilder) Origin(funcPtr interface{}) *MockBuilder {
