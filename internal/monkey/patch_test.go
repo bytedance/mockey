@@ -17,31 +17,68 @@
 package monkey
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/smartystreets/goconvey/convey"
 )
 
 //go:noinline
-func A() int {
+func Target() int {
 	return 0
-}
-
-func Proxy() int {
-	return 1
 }
 
 func Hook() int {
 	return 2
 }
 
+func UnsafeTarget() {}
+
 func TestPatchFunc(t *testing.T) {
 	convey.Convey("TestPatchFunc", t, func() {
-		fun := Proxy
-		patch := PatchFunc(A, Hook, &fun)
-		convey.So(A(), convey.ShouldEqual, 2)
-		convey.So(fun(), convey.ShouldEqual, 0)
-		patch.Unpatch()
-		convey.So(A(), convey.ShouldEqual, 0)
+		convey.Convey("normal", func() {
+			var proxy func() int
+			patch := PatchFunc(Target, Hook, &proxy, false)
+			convey.So(Target(), convey.ShouldEqual, 2)
+			convey.So(proxy(), convey.ShouldEqual, 0)
+			patch.Unpatch()
+			convey.So(Target(), convey.ShouldEqual, 0)
+		})
+		convey.Convey("anonymous hook", func() {
+			var proxy func() int
+			patch := PatchFunc(Target, func() int { return 2 }, &proxy, false)
+			convey.So(Target(), convey.ShouldEqual, 2)
+			convey.So(proxy(), convey.ShouldEqual, 0)
+			patch.Unpatch()
+			convey.So(Target(), convey.ShouldEqual, 0)
+		})
+		convey.Convey("closure hook", func() {
+			var proxy func() int
+			hookBuilder := func(x int) func() int {
+				return func() int { return x }
+			}
+			patch := PatchFunc(Target, hookBuilder(2), &proxy, false)
+			convey.So(Target(), convey.ShouldEqual, 2)
+			convey.So(proxy(), convey.ShouldEqual, 0)
+			patch.Unpatch()
+			convey.So(Target(), convey.ShouldEqual, 0)
+		})
+		convey.Convey("reflect hook", func() {
+			var proxy func() int
+			hookVal := reflect.MakeFunc(reflect.TypeOf(Hook), func(args []reflect.Value) (results []reflect.Value) { return []reflect.Value{reflect.ValueOf(2)} })
+			patch := PatchFunc(Target, hookVal.Interface(), &proxy, false)
+			convey.So(Target(), convey.ShouldEqual, 2)
+			convey.So(proxy(), convey.ShouldEqual, 0)
+			patch.Unpatch()
+			convey.So(Target(), convey.ShouldEqual, 0)
+		})
+		convey.Convey("unsafe", func() {
+			var proxy func()
+			patch := PatchFunc(UnsafeTarget, func() { panic("good") }, &proxy, true)
+			convey.So(func() { UnsafeTarget() }, convey.ShouldPanicWith, "good")
+			convey.So(func() { proxy() }, convey.ShouldNotPanic)
+			patch.Unpatch()
+			convey.So(func() { UnsafeTarget() }, convey.ShouldNotPanic)
+		})
 	})
 }

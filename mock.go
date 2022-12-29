@@ -53,6 +53,7 @@ type MockBuilder struct {
 	gId              int64
 	missHookReceiver bool
 	missWhenReceiver bool
+	unsafe           bool
 }
 
 func Mock(target interface{}) *MockBuilder {
@@ -60,6 +61,17 @@ func Mock(target interface{}) *MockBuilder {
 
 	return &MockBuilder{
 		target: target,
+	}
+}
+
+// MockUnsafe has the full ability of the Mock function and removes some security restrictions. This is an alternative
+// when the Mock function fails. It may cause some unknown problems, so we recommend using Mock under normal conditions.
+func MockUnsafe(target interface{}) *MockBuilder {
+	tool.AssertFunc(target)
+
+	return &MockBuilder{
+		target: target,
+		unsafe: true,
 	}
 }
 
@@ -226,7 +238,7 @@ func (mocker *Mocker) Patch() *Mocker {
 	if mocker.isPatched {
 		return mocker
 	}
-	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, reflect.ValueOf(mocker.proxy))
+	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, reflect.ValueOf(mocker.proxy), mocker.builder.unsafe)
 	mocker.isPatched = true
 	addToGlobal(mocker)
 
