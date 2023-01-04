@@ -27,6 +27,8 @@ type mockerInstance interface {
 	key() uintptr
 	name() string
 	unPatch()
+
+	caller() tool.CallerInfo
 }
 
 type MockerVar struct {
@@ -36,6 +38,8 @@ type MockerVar struct {
 	origin     interface{} // 原始值
 	lock       sync.Mutex
 	isPatched  bool
+
+	outerCaller tool.CallerInfo
 }
 
 func MockValue(targetPtr interface{}) *MockerVar {
@@ -72,6 +76,8 @@ func (mocker *MockerVar) Patch() *MockerVar {
 		mocker.target.Set(mocker.hook)
 		mocker.isPatched = true
 		addToGlobal(mocker)
+
+		mocker.outerCaller = tool.OuterCaller()
 	}
 
 	return mocker
@@ -98,9 +104,16 @@ func (mocker *MockerVar) key() uintptr {
 }
 
 func (mocker *MockerVar) name() string {
+	if mocker.target.Kind() == reflect.String {
+		return "<string Value>"
+	}
 	return mocker.target.String()
 }
 
 func (mocker *MockerVar) unPatch() {
 	mocker.UnPatch()
+}
+
+func (mocker *MockerVar) caller() tool.CallerInfo {
+	return mocker.outerCaller
 }

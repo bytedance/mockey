@@ -42,6 +42,8 @@ type Mocker struct {
 	lock      sync.Mutex
 	isPatched bool
 	builder   *MockBuilder
+
+	outerCaller tool.CallerInfo // Mocker 的外部调用位置
 }
 
 type MockBuilder struct {
@@ -242,6 +244,7 @@ func (mocker *Mocker) Patch() *Mocker {
 	mocker.isPatched = true
 	addToGlobal(mocker)
 
+	mocker.outerCaller = tool.OuterCaller()
 	return mocker
 }
 
@@ -340,4 +343,8 @@ func (mocker *Mocker) name() string {
 
 func (mocker *Mocker) unPatch() {
 	mocker.UnPatch()
+}
+
+func (mocker *Mocker) caller() tool.CallerInfo {
+	return mocker.outerCaller
 }
