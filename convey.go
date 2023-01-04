@@ -50,8 +50,10 @@ func PatchConvey(items ...interface{}) {
 
 func addToGlobal(mocker mockerInstance) {
 	tool.DebugPrintf("%v added\n", mocker.key())
-	_, ok := gMocker[len(gMocker)-1][mocker.key()]
-	tool.Assert(!ok, "re-mock %v", mocker.name())
+	last, ok := gMocker[len(gMocker)-1][mocker.key()]
+	if ok {
+		tool.Assert(!ok, "re-mock %v, previous mock at: %v", mocker.name(), last.caller())
+	}
 	gMocker[len(gMocker)-1][mocker.key()] = mocker
 }
 
