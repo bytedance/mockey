@@ -18,6 +18,7 @@ package mockey
 
 import (
 	"reflect"
+	"unsafe"
 
 	"github.com/bytedance/mockey/internal/tool"
 )
@@ -31,9 +32,45 @@ func GetMethod(instance interface{}, methodName string) interface{} {
 		if m, ok := typ.MethodByName(methodName); ok {
 			return m.Func.Interface()
 		}
+		if m, ok := getFieldMethod(instance, methodName); ok {
+			return m
+		}
 	}
 	tool.Assert(false, "can't reflect instance method :%v", methodName)
 	return nil
+}
+
+// getFieldMethod gets a functional field's value as an instance
+// The return instance is not original field but a new function object points to
+// the same function.
+// for example:
+//
+//	  type Fn func()
+//	  type Foo struct {
+//			privateField Fn
+//	  }
+//	  func NewFoo() Foo { return Foo{ privateField: func() { /*do nothing*/ } }}
+//
+// getFieldMethod(NewFoo(),"privateField") will return a function object which
+// points to the anonymous function in NewFoo
+func getFieldMethod(instance interface{}, fieldName string) (interface{}, bool) {
+	v := reflect.Indirect(reflect.ValueOf(instance))
+	if v.Kind() != reflect.Struct {
+		return nil, false
+	}
+
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() || field.Kind() != reflect.Func {
+		return nil, false
+	}
+
+	carrier := reflect.MakeFunc(field.Type(), nil)
+	type function struct {
+		_      uintptr
+		fnAddr *uintptr
+	}
+	*(*function)(unsafe.Pointer(&carrier)).fnAddr = field.Pointer()
+	return carrier.Interface(), true
 }
 
 // GetPrivateMethod ...

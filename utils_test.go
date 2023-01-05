@@ -139,6 +139,20 @@ func (s testD) FooD() {}
 
 func (s *testD) BarD() {}
 
+type Fn func()
+
+type testFuncField struct {
+	Public  Fn
+	private Fn
+}
+
+func NewTestFuncField() *testFuncField {
+	return &testFuncField{
+		Public:  func() { panic("shouldn't here") },
+		private: func() { panic("shouldn't here") },
+	}
+}
+
 func TestGetMethod(t *testing.T) {
 	convey.Convey("TestGetMethod", t, func() {
 		convey.Convey("basic cases", func() {
@@ -182,6 +196,19 @@ func TestGetMethod(t *testing.T) {
 				convey.So(func() { GetMethod(instance, "FooC") }, convey.ShouldNotPanic)
 				convey.So(func() { GetMethod(instance, "BarC") }, convey.ShouldNotPanic)
 			})
+
+			convey.Convey("case testFuncField", func() {
+				var instance interface{} = NewTestFuncField()
+				convey.So(func() { GetMethod(instance, "Public") }, convey.ShouldNotPanic)
+				convey.So(func() { GetMethod(instance, "private") }, convey.ShouldNotPanic)
+				convey.So(func() { GetMethod(instance, "notExist") }, convey.ShouldPanicWith, "can't reflect instance method :notExist")
+				convey.So(func() {
+					reflect.ValueOf(GetMethod(instance, "Public")).Call([]reflect.Value{})
+				}, convey.ShouldPanicWith, "shouldn't here")
+				convey.So(func() {
+					reflect.ValueOf(GetMethod(instance, "private")).Call([]reflect.Value{})
+				}, convey.ShouldPanicWith, "shouldn't here")
+			})
 		})
 
 		PatchConvey("patch cases", func() {
@@ -207,6 +234,17 @@ func TestGetMethod(t *testing.T) {
 				Mock(GetMethod(instance, "BarC")).To(func() { panic("should here") }).Build()
 				convey.So(func() { instance.FooC() }, convey.ShouldPanicWith, "should here")
 				convey.So(func() { instance.BarC() }, convey.ShouldPanicWith, "should here")
+			})
+
+			PatchConvey("case testFuncField", func() {
+				instance := NewTestFuncField()
+				caller := NewTestFuncField()
+				Mock(GetMethod(instance, "Public")).To(func() { panic("should here") }).Build()
+				Mock(GetMethod(instance, "private")).To(func() { panic("should here") }).Build()
+				convey.So(func() { instance.Public() }, convey.ShouldPanicWith, "should here")
+				convey.So(func() { caller.Public() }, convey.ShouldPanicWith, "should here")
+				convey.So(func() { instance.private() }, convey.ShouldPanicWith, "should here")
+				convey.So(func() { caller.private() }, convey.ShouldPanicWith, "should here")
 			})
 		})
 	})
