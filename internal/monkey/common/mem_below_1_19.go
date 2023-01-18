@@ -1,3 +1,6 @@
+//go:build !go1.19
+// +build !go1.19
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -16,28 +19,15 @@
 
 package common
 
-import (
-	"syscall"
-	"unsafe"
-)
+import "unsafe"
 
-var pageSize = uintptr(syscall.Getpagesize())
+/*
+ * This may lead to runtime.ReadMemStats inaccurate
+ * See https://github.com/bytedance/mockey/issues/13
+ */
 
-func PageOf(ptr uintptr) uintptr {
-	return ptr &^ (pageSize - 1)
-}
+//go:linkname sysAlloc runtime.sysAlloc
+func sysAlloc(n uintptr, sysStat *uint64) unsafe.Pointer
 
-func PageSize() int {
-	return int(pageSize)
-}
-
-func AllocatePage() []byte {
-	var memStats uint64 = 0
-	addr := sysAlloc(pageSize, &memStats)
-	return BytesOf(uintptr(addr), int(pageSize))
-}
-
-func ReleasePage(mem []byte) {
-	memStats := uint64(cap(mem))
-	sysFree(unsafe.Pointer(PtrOf(mem)), uintptr(cap(mem)), &memStats)
-}
+//go:linkname sysFree runtime.sysFree
+func sysFree(v unsafe.Pointer, n uintptr, sysStat *uint64)

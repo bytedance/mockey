@@ -13,31 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package common
 
 import (
-	"syscall"
-	"unsafe"
+	"runtime"
+	"testing"
+
+	"github.com/smartystreets/goconvey/convey"
 )
 
-var pageSize = uintptr(syscall.Getpagesize())
+func TestSysAlloc(t *testing.T) {
+	convey.Convey("sysAlloc", t, func() {
+		convey.So(func() {
+			data := AllocatePage()
 
-func PageOf(ptr uintptr) uintptr {
-	return ptr &^ (pageSize - 1)
-}
+			// try write first and last byte of data
+			data[0] = 0
+			data[len(data)-1] = 0
 
-func PageSize() int {
-	return int(pageSize)
-}
+			// try get mem stat
+			m := runtime.MemStats{}
+			runtime.ReadMemStats(&m)
 
-func AllocatePage() []byte {
-	var memStats uint64 = 0
-	addr := sysAlloc(pageSize, &memStats)
-	return BytesOf(uintptr(addr), int(pageSize))
-}
-
-func ReleasePage(mem []byte) {
-	memStats := uint64(cap(mem))
-	sysFree(unsafe.Pointer(PtrOf(mem)), uintptr(cap(mem)), &memStats)
+			ReleasePage(data)
+		}, convey.ShouldNotPanic)
+	})
 }
