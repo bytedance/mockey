@@ -21,52 +21,36 @@
 #define NOP512 NOP64; NOP64; NOP64; NOP64; NOP64; NOP64; NOP64; NOP64;
 #define NOP4096 NOP512; NOP512; NOP512; NOP512; NOP512; NOP512; NOP512; NOP512;
 
-#define addr        arg + 0x00(FP)
-#define data        arg + 0x08(FP)
-#define size        arg + 0x10(FP)
-#define mprotect    arg + 0x18(FP)
-#define prot_rw     arg + 0x20(FP)
-#define prot_rx     arg + 0x28(FP)
+#define protRW $(0x1|0x2)
+#define mProtect $0x0a
 
-#define CMOVNEQ_AX_CX   \
-    BYTE $0x48          \
-    BYTE $0x0f          \
-    BYTE $0x45          \
-    BYTE $0xc8
-
-TEXT ·do_replace_code(SB), NOSPLIT, $0x30 - 0
+TEXT ·write(SB),NOSPLIT,$24
     JMP START
     NOP4096
 START:
-    MOVQ    addr, DI
-    MOVQ    size, SI
-    MOVQ    DI, AX
-    ANDQ    $0x0fff, AX
-    ANDQ    $~0x0fff, DI
-    ADDQ    AX, SI
-    MOVQ    SI, CX
-    ANDQ    $0x0fff, CX
-    MOVQ    $0x1000, AX
-    SUBQ    CX, AX
-    TESTQ   CX, CX
-    CMOVNEQ_AX_CX
-    ADDQ    CX, SI
-    MOVQ    DI, R8
-    MOVQ    SI, R9
-    MOVQ    mprotect , AX
-    MOVQ    prot_rw  , DX
+    MOVQ    mProtect, AX
+    MOVQ    page+24(FP), DI
+    MOVQ    pageSize+32(FP), SI
+    MOVQ    protRW, DX
     SYSCALL
-    MOVQ    addr, DI
-    MOVQ    data, SI
-    MOVQ    size, CX
-    REP
-    MOVSB
-    MOVQ    R8, DI
-    MOVQ    R9, SI
-    MOVQ    mprotect , AX
-    MOVQ    prot_rx  , DX
+    CMPQ    AX, $0
+    JZ      PROTECT_OK
+    JMP     RETURN
+PROTECT_OK:
+    MOVQ    target+0(FP), DI
+    MOVQ    data+8(FP), SI
+    MOVQ    len+16(FP), CX
+    MOVQ    DI, to-24(SP)
+    MOVQ    SI, from-16(SP)
+    MOVQ    CX, n-8(SP)
+    CALL    runtime·memmove(SB)
+    MOVQ    mProtect, AX
+    MOVQ    page+24(FP), DI
+    MOVQ    pageSize+32(FP), SI
+    MOVQ    oriProt+40(FP), DX
     SYSCALL
     JMP     RETURN
     NOP4096
 RETURN:
+    MOVQ AX, ret+48(FP)
     RET

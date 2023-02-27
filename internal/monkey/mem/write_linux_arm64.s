@@ -21,28 +21,21 @@
 #define NOP4096 NOP512; NOP512; NOP512; NOP512; NOP512; NOP512; NOP512; NOP512;
 #define NOP16384 NOP4096; NOP4096; NOP4096; NOP4096; NOP4096; NOP4096; NOP4096; NOP4096;
 
-#define protRW $(0x1|0x2|0x10)
-#define mProtect $(0x2000000+74)
+#define protRW $(0x1|0x2)
+#define mProtect $0xe2
 
 TEXT ·write(SB),NOSPLIT,$24
     B START
     NOP16384
 START:
-    MOVD    mProtect, R16
+    MOVD    mProtect, R8
     MOVD    page+24(FP), R0
     MOVD    pageSize+32(FP), R1
     MOVD    protRW, R2
-    SVC     $0x80
+    SVC     $0x00
     CMP     $0, R0
     BEQ     PROTECT_OK
-    CALL    mach_task_self(SB)
-    MOVD    target+0(FP), R1
-    MOVD    len+16(FP), R2
-    MOVD    $0, R3
-    MOVD    protRW, R4
-    CALL    mach_vm_protect(SB)
-    CMP     $0, R0
-    BNE     RETURN
+    B       RETURN
 PROTECT_OK:
     MOVD    target+0(FP), R0
     MOVD    data+8(FP), R1
@@ -51,11 +44,11 @@ PROTECT_OK:
     MOVD    R1, from-16(SP)
     MOVD    R2, n-8(SP)
     CALL    runtime·memmove(SB)
-    MOVD    mProtect, R16
+    MOVD    mProtect, R8
     MOVD    page+24(FP), R0
     MOVD    pageSize+32(FP), R1
     MOVD    oriProt+40(FP), R2
-    SVC     $0x80
+    SVC     $0x00
     B       RETURN
     NOP16384
 RETURN:
