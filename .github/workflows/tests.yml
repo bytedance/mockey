@@ -10,8 +10,6 @@ jobs:
         os: [ linux ] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
         arch: [ X64, ARM64 ]
         exclude:
-          - os: Linux
-            arch: ARM64
           - os: Windows
             arch: ARM64
     runs-on: [ "${{ matrix.os }}", "${{ matrix.arch }}" ]
