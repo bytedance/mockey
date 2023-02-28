@@ -17,21 +17,23 @@
 package mem
 
 import (
+	"fmt"
+	"reflect"
 	"syscall"
 
 	"github.com/bytedance/mockey/internal/monkey/common"
+	"github.com/bytedance/mockey/internal/tool"
 )
 
 func Write(target uintptr, data []byte) error {
-	do_replace_code(target, common.PtrOf(data), uint64(len(data)), syscall.SYS_MPROTECT, syscall.PROT_READ|syscall.PROT_WRITE, syscall.PROT_READ|syscall.PROT_EXEC)
+	targetPage := common.PageOf(target)
+	fnPage := common.PageOf(reflect.ValueOf(write).Pointer())
+	tool.DebugPrintf("Write: target page(0x%x), fn page(0x%x)\n", targetPage, fnPage)
+	res := write(target, common.PtrOf(data), len(data), targetPage, common.PageSize(), syscall.PROT_READ|syscall.PROT_EXEC)
+	if res != 0 {
+		return fmt.Errorf("write failed, code %v", res)
+	}
 	return nil
 }
 
-func do_replace_code(
-	_ uintptr, // void   *addr
-	_ uintptr, // void   *data
-	_ uint64, // size_t  size
-	_ uint64, // int     mprotect
-	_ uint64, // int     prot_rw
-	_ uint64, // int     prot_rx
-)
+func write(target, data uintptr, len int, page uintptr, pageSize, oriProt int) int
