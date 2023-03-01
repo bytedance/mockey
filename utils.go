@@ -26,7 +26,7 @@ import (
 // GetMethod resolve a certain public method from an instance.
 func GetMethod(instance interface{}, methodName string) interface{} {
 	if typ := reflect.TypeOf(instance); typ != nil {
-		if m, ok := getNestedMethod(typ, methodName); ok {
+		if m, ok := getNestedMethod(reflect.ValueOf(instance), methodName); ok {
 			return m.Func.Interface()
 		}
 		if m, ok := typ.MethodByName(methodName); ok {
@@ -89,7 +89,7 @@ func GetPrivateMethod(instance interface{}, methodName string) interface{} {
 // Deprecated, use GetMethod instead.
 func GetNestedMethod(instance interface{}, methodName string) interface{} {
 	if typ := reflect.TypeOf(instance); typ != nil {
-		if m, ok := getNestedMethod(typ, methodName); ok {
+		if m, ok := getNestedMethod(reflect.ValueOf(instance), methodName); ok {
 			return m.Func.Interface()
 		}
 	}
@@ -97,17 +97,25 @@ func GetNestedMethod(instance interface{}, methodName string) interface{} {
 	return nil
 }
 
-func getNestedMethod(typ reflect.Type, methodName string) (reflect.Method, bool) {
-	if typ.Kind() == reflect.Ptr {
-		typ = typ.Elem()
+func getNestedMethod(val reflect.Value, methodName string) (reflect.Method, bool) {
+	typ := val.Type()
+	kind := typ.Kind()
+	if kind == reflect.Ptr || kind == reflect.Interface {
+		val = val.Elem()
 	}
-	if typ.Kind() == reflect.Struct {
+	if !val.IsValid() {
+		return reflect.Method{}, false
+	}
+
+	typ = val.Type()
+	kind = typ.Kind()
+	if kind == reflect.Struct {
 		for i := 0; i < typ.NumField(); i++ {
 			if !typ.Field(i).Anonymous {
 				// there is no need to acquire non-anonymous method
 				continue
 			}
-			if m, ok := getNestedMethod(typ.Field(i).Type, methodName); ok {
+			if m, ok := getNestedMethod(val.Field(i), methodName); ok {
 				return m, true
 			}
 		}
