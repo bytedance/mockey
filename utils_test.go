@@ -249,3 +249,145 @@ func TestGetMethod(t *testing.T) {
 		})
 	})
 }
+
+type testNested interface {
+	FooNested()
+}
+type testOuter struct {
+	testNested
+}
+
+type testInner struct {
+	i int
+}
+
+func (testInner) FooNested() {
+	panic("not here")
+}
+
+type testInnerP struct {
+	s string
+}
+
+func (*testInnerP) FooNested() {
+	panic("not here p")
+}
+
+func TestGetNested(t *testing.T) {
+	PatchConvey("TestGetNested", t, func() {
+		PatchConvey("instance implement", func() {
+			var obj testNested
+			PatchConvey("pointer container", func() {
+				obj = &testOuter{testNested: testInner{}}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+			PatchConvey("struct container", func() {
+				obj = testOuter{testNested: testInner{}}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+			PatchConvey("nested container", func() {
+				obj = &testOuter{
+					testNested: testOuter{
+						testNested: &testOuter{
+							testNested: testOuter{
+								testNested: testInner{},
+							},
+						},
+					},
+				}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+		})
+		PatchConvey("instance implement(but pointer field)", func() {
+			var obj testNested
+			PatchConvey("pointer container", func() {
+				obj = &testOuter{testNested: &testInner{}}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+			PatchConvey("struct container", func() {
+				obj = testOuter{testNested: &testInner{}}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+			PatchConvey("nested container", func() {
+				obj = &testOuter{
+					testNested: testOuter{
+						testNested: &testOuter{
+							testNested: testOuter{
+								testNested: &testInner{},
+							},
+						},
+					},
+				}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+		})
+		PatchConvey("pointer implement", func() {
+			var obj testNested
+			PatchConvey("pointer container", func() {
+				obj = &testOuter{testNested: &testInnerP{}}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+			PatchConvey("struct container", func() {
+				obj = testOuter{testNested: &testInnerP{}}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+			PatchConvey("nested container", func() {
+				obj = &testOuter{
+					testNested: testOuter{
+						testNested: &testOuter{
+							testNested: testOuter{
+								testNested: &testInnerP{},
+							},
+						},
+					},
+				}
+				convey.So(func() {
+					Mock(GetMethod(obj, "FooNested")).Return().Build()
+				}, convey.ShouldNotPanic)
+				convey.So(func() {
+					obj.FooNested()
+				}, convey.ShouldNotPanic)
+			})
+		})
+	})
+}
