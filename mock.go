@@ -47,15 +47,13 @@ type Mocker struct {
 }
 
 type MockBuilder struct {
-	target           interface{} // 目标函数
-	hook             interface{} // mock函数
-	proxy            interface{} // mock之后，原函数地址
-	when             interface{} // 条件函数
-	filterGoroutine  FilterGoroutineType
-	gId              int64
-	missHookReceiver bool
-	missWhenReceiver bool
-	unsafe           bool
+	target          interface{} // 目标函数
+	hook            interface{} // mock函数
+	proxyCaller     interface{} // mock之后，原函数地址
+	when            interface{} // 条件函数
+	filterGoroutine FilterGoroutineType
+	gId             int64
+	unsafe          bool
 }
 
 func Mock(target interface{}) *MockBuilder {
@@ -78,13 +76,13 @@ func MockUnsafe(target interface{}) *MockBuilder {
 }
 
 func (builder *MockBuilder) Origin(funcPtr interface{}) *MockBuilder {
-	tool.Assert(builder.proxy == nil, "re-set builder origin")
+	tool.Assert(builder.proxyCaller == nil, "re-set builder origin")
 	return builder.origin(funcPtr)
 }
 
 func (builder *MockBuilder) origin(funcPtr interface{}) *MockBuilder {
 	tool.AssertPtr(funcPtr)
-	builder.proxy = funcPtr
+	builder.proxyCaller = funcPtr
 	return builder
 }
 
@@ -159,7 +157,7 @@ func (builder *MockBuilder) Build() *Mocker {
 
 func (mocker *Mocker) checkReceiver(target reflect.Type, hook interface{}) bool {
 	hType := reflect.TypeOf(hook)
-	tool.Assert(hType.Kind() == reflect.Func, "Param a is not a func")
+	tool.Assert(hType.Kind() == reflect.Func, "Param(%v) a is not a func", hType.Kind())
 	tool.Assert(target.IsVariadic() == hType.IsVariadic(), "target:%v, hook:%v args not match", target, hook)
 	// has receiver
 	if tool.CheckFuncArgs(target, hType, 0) {
@@ -175,24 +173,44 @@ func (mocker *Mocker) checkReceiver(target reflect.Type, hook interface{}) bool 
 func (mocker *Mocker) buildHook(builder *MockBuilder) {
 	when := builder.when
 	hook := builder.hook
-	proxy := builder.proxy
 
-	var p reflect.Value
+	proxy := reflect.New(mocker.target.Type())
 
-	if proxy == nil {
-		proxy := mocker.target
-		p = reflect.New(proxy.Type())
-	} else {
-		p = reflect.ValueOf(proxy)
-	}
+	var missWhenReceiver, missHookReceiver, missProxyReceiver bool
 	if when != nil {
-		builder.missWhenReceiver = mocker.checkReceiver(mocker.target.Type(), when)
+		missWhenReceiver = mocker.checkReceiver(mocker.target.Type(), when)
 	}
 	if hook != nil {
-		builder.missHookReceiver = mocker.checkReceiver(mocker.target.Type(), hook)
+		missHookReceiver = mocker.checkReceiver(mocker.target.Type(), hook)
 	}
+
+	proxyCallerSetter := func(args []reflect.Value) {}
+
+	if builder.proxyCaller != nil {
+		pVal := reflect.ValueOf(builder.proxyCaller)
+		tool.Assert(pVal.Kind() == reflect.Ptr && pVal.Elem().Kind() == reflect.Func, "origin receiver must be a function pointer")
+		pElem := pVal.Elem()
+		missProxyReceiver = mocker.checkReceiver(mocker.target.Type(), pElem.Interface())
+
+		if missProxyReceiver {
+			proxyCallerSetter = func(args []reflect.Value) {
+				pElem.Set(reflect.MakeFunc(pElem.Type(), func(innerArgs []reflect.Value) (results []reflect.Value) {
+					return tool.ReflectCall(proxy.Elem(), append(args[0:1], innerArgs...))
+				}))
+			}
+		} else {
+			proxyCallerSetter = func(args []reflect.Value) {
+				pElem.Set(reflect.MakeFunc(pElem.Type(), func(innerArgs []reflect.Value) (results []reflect.Value) {
+					return tool.ReflectCall(proxy.Elem(), innerArgs)
+				}))
+			}
+		}
+	}
+
 	mockerHook := reflect.MakeFunc(mocker.target.Type(), func(args []reflect.Value) []reflect.Value {
-		origin := p.Elem()
+		proxyCallerSetter(args) // 设置origin调用proxy
+
+		origin := proxy.Elem()
 		mocker.access()
 
 		switch builder.filterGoroutine {
@@ -212,13 +230,13 @@ func (mocker *Mocker) buildHook(builder *MockBuilder) {
 
 		if when != nil {
 			wVal := reflect.ValueOf(when)
-			ret := tool.ReflectCallWithShiftOne(wVal, args, builder.missWhenReceiver)
+			ret := tool.ReflectCallWithShiftOne(wVal, args, missWhenReceiver)
 			b := ret[0].Bool()
 
 			if b && hook != nil {
 				hVal = reflect.ValueOf(hook)
 				mocker.mock()
-				return tool.ReflectCallWithShiftOne(hVal, args, builder.missHookReceiver)
+				return tool.ReflectCallWithShiftOne(hVal, args, missHookReceiver)
 			}
 			return tool.ReflectCall(origin, args)
 		}
@@ -228,10 +246,10 @@ func (mocker *Mocker) buildHook(builder *MockBuilder) {
 			hVal = reflect.ValueOf(hook)
 		}
 		mocker.mock()
-		return tool.ReflectCallWithShiftOne(hVal, args, builder.missHookReceiver)
+		return tool.ReflectCallWithShiftOne(hVal, args, missHookReceiver)
 	})
 	mocker.hook = mockerHook
-	mocker.proxy = p.Interface()
+	mocker.proxy = proxy.Interface()
 }
 
 func (mocker *Mocker) Patch() *Mocker {

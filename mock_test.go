@@ -320,3 +320,68 @@ func TestMockUnsafe(t *testing.T) {
 		So(func() { ShortFun() }, ShouldPanicWith, "in hook")
 	})
 }
+
+type foo struct{ i int }
+
+func (f *foo) Name(i int) string { return fmt.Sprintf("Fn-%v-%v", f.i, i) }
+
+func (f *foo) Foo() int { return f.i }
+
+func TestMockOrigin(t *testing.T) {
+	PatchConvey("struct-origin", t, func() {
+		PatchConvey("with receiver", func() {
+			var ori1 func(*foo, int) string
+			var ori2 func(*foo, int) string
+			mocker := Mock((*foo).Name).To(func(f *foo, i int) string {
+				if i == 1 {
+					return ori1(f, i)
+				}
+				return ori2(f, i)
+			}).Origin(&ori1).Build()
+
+			ori2 = func(f *foo, i int) string { return fmt.Sprintf("Fn-mock2-%v", i) }
+			So((&foo{100}).Name(1), ShouldEqual, "Fn-100-1")
+			So((&foo{200}).Name(1), ShouldEqual, "Fn-200-1")
+			So((&foo{100}).Name(2), ShouldEqual, "Fn-mock2-2")
+			So((&foo{200}).Name(2), ShouldEqual, "Fn-mock2-2")
+
+			ori1 = func(f *foo, i int) string { return fmt.Sprintf("Fn-mock1-%v", i) }
+			mocker.Origin(&ori2)
+			So((&foo{100}).Name(1), ShouldEqual, "Fn-mock1-1")
+			So((&foo{200}).Name(1), ShouldEqual, "Fn-mock1-1")
+			So((&foo{100}).Name(2), ShouldEqual, "Fn-100-2")
+			So((&foo{200}).Name(2), ShouldEqual, "Fn-200-2")
+		})
+		PatchConvey("without receiver", func() {
+			var ori1 func(int) string
+			var ori2 func(int) string
+			mocker := Mock((*foo).Name).To(func(i int) string {
+				if i == 1 {
+					return ori1(i)
+				}
+				return ori2(i)
+			}).Origin(&ori1).Build()
+
+			ori2 = func(i int) string { return fmt.Sprintf("Fn-mock2-%v", i) }
+			So((&foo{100}).Name(1), ShouldEqual, "Fn-100-1")
+			So((&foo{200}).Name(1), ShouldEqual, "Fn-200-1")
+			So((&foo{100}).Name(2), ShouldEqual, "Fn-mock2-2")
+			So((&foo{200}).Name(2), ShouldEqual, "Fn-mock2-2")
+
+			ori1 = func(i int) string { return fmt.Sprintf("Fn-mock1-%v", i) }
+			mocker.Origin(&ori2)
+			So((&foo{100}).Name(1), ShouldEqual, "Fn-mock1-1")
+			So((&foo{200}).Name(1), ShouldEqual, "Fn-mock1-1")
+			So((&foo{100}).Name(2), ShouldEqual, "Fn-100-2")
+			So((&foo{200}).Name(2), ShouldEqual, "Fn-200-2")
+		})
+	})
+	PatchConvey("issue https://github.com/bytedance/mockey/issues/15", t, func() {
+		var origin func() int
+		f := &foo{}
+		Mock(GetMethod(f, "Foo")).To(func() int { return origin() + 1 }).Origin(&origin).Build()
+		So((&foo{1}).Foo(), ShouldEqual, 2)
+		So((&foo{2}).Foo(), ShouldEqual, 3)
+		So((&foo{3}).Foo(), ShouldEqual, 4)
+	})
+}

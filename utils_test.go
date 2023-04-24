@@ -258,7 +258,7 @@ type testOuter struct {
 }
 
 type testInner struct {
-	i int
+	_ int
 }
 
 func (testInner) FooNested() {
@@ -266,7 +266,7 @@ func (testInner) FooNested() {
 }
 
 type testInnerP struct {
-	s string
+	_ string
 }
 
 func (*testInnerP) FooNested() {
