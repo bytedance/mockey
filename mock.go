@@ -19,6 +19,7 @@ package mockey
 import (
 	"reflect"
 	"sync"
+	"sync/atomic"
 
 	"github.com/bytedance/mockey/internal/monkey"
 	"github.com/bytedance/mockey/internal/tool"
@@ -36,8 +37,8 @@ type Mocker struct {
 	target    reflect.Value // 目标函数
 	hook      reflect.Value // mock函数
 	proxy     interface{}   // mock之后，原函数地址
-	times     int
-	mockTimes int
+	times     int64
+	mockTimes int64
 	patch     *monkey.Patch
 	lock      sync.Mutex
 	isPatched bool
@@ -47,10 +48,11 @@ type Mocker struct {
 }
 
 type MockBuilder struct {
-	target          interface{} // 目标函数
-	hook            interface{} // mock函数
-	proxyCaller     interface{} // mock之后，原函数地址
-	when            interface{} // 条件函数
+	target interface{} // 目标函数
+	// hook            interface{} // mock函数
+	proxyCaller interface{} // mock之后，原函数地址
+	// when            interface{} // 条件函数
+	conditions      []*mockCondition // 条件转移
 	filterGoroutine FilterGoroutineType
 	gId             int64
 	unsafe          bool
@@ -59,20 +61,24 @@ type MockBuilder struct {
 func Mock(target interface{}) *MockBuilder {
 	tool.AssertFunc(target)
 
-	return &MockBuilder{
+	builder := &MockBuilder{
 		target: target,
 	}
+	builder.resetCondition()
+	return builder
 }
 
 // MockUnsafe has the full ability of the Mock function and removes some security restrictions. This is an alternative
 // when the Mock function fails. It may cause some unknown problems, so we recommend using Mock under normal conditions.
 func MockUnsafe(target interface{}) *MockBuilder {
-	tool.AssertFunc(target)
+	builder := Mock(target)
+	builder.unsafe = true
+	return builder
+}
 
-	return &MockBuilder{
-		target: target,
-		unsafe: true,
-	}
+func (builder *MockBuilder) resetCondition() *MockBuilder {
+	builder.conditions = []*mockCondition{builder.newCondition()} // at least 1 condition is needed
+	return builder
 }
 
 func (builder *MockBuilder) Origin(funcPtr interface{}) *MockBuilder {
@@ -86,35 +92,32 @@ func (builder *MockBuilder) origin(funcPtr interface{}) *MockBuilder {
 	return builder
 }
 
+func (builder *MockBuilder) lastCondition() *mockCondition {
+	cond := builder.conditions[len(builder.conditions)-1]
+	if cond.Complete() {
+		cond = builder.newCondition()
+		builder.conditions = append(builder.conditions, cond)
+	}
+	return cond
+}
+
+func (builder *MockBuilder) newCondition() *mockCondition {
+	return &mockCondition{builder: builder}
+}
+
 func (builder *MockBuilder) When(when interface{}) *MockBuilder {
-	tool.Assert(builder.when == nil, "re-set builder when")
-	return builder.setWhen(when)
-}
-
-func (builder *MockBuilder) setWhen(when interface{}) *MockBuilder {
-	wVal := reflect.ValueOf(when)
-	tool.Assert(wVal.Type().NumOut() == 1, "when func ret value not bool")
-	out1 := wVal.Type().Out(0)
-	tool.Assert(out1.Kind() == reflect.Bool, "when func ret value not bool")
-	builder.when = when
-	return builder
-}
-
-func (builder *MockBuilder) setTo(hook interface{}) *MockBuilder {
-	hType := reflect.TypeOf(hook)
-	tool.Assert(hType.Kind() == reflect.Func, "hook a is not a func")
-	builder.hook = hook
+	builder.lastCondition().SetWhen(when)
 	return builder
 }
 
 func (builder *MockBuilder) To(hook interface{}) *MockBuilder {
-	tool.Assert(builder.hook == nil, "re-set builder hook")
-	return builder.setTo(hook)
+	builder.lastCondition().SetTo(hook)
+	return builder
 }
 
 func (builder *MockBuilder) Return(results ...interface{}) *MockBuilder {
-	tool.Assert(builder.hook == nil, "re-set builder hook")
-	return builder.setReturn(results...)
+	builder.lastCondition().SetReturn(results...)
+	return builder
 }
 
 func (builder *MockBuilder) IncludeCurrentGoRoutine() *MockBuilder {
@@ -131,26 +134,9 @@ func (builder *MockBuilder) FilterGoRoutine(filter FilterGoroutineType, gId int6
 	return builder
 }
 
-func (builder *MockBuilder) setReturn(results ...interface{}) *MockBuilder {
-	tool.CheckReturnType(builder.target, results...)
-	targetType := reflect.TypeOf(builder.target)
-	builder.hook = reflect.MakeFunc(targetType, func(args []reflect.Value) []reflect.Value {
-		valueResults := make([]reflect.Value, 0)
-		for i, result := range results {
-			rValue := reflect.Zero(targetType.Out(i))
-			if result != nil {
-				rValue = reflect.ValueOf(result).Convert(targetType.Out(i))
-			}
-			valueResults = append(valueResults, rValue)
-		}
-		return valueResults
-	}).Interface()
-	return builder
-}
-
 func (builder *MockBuilder) Build() *Mocker {
 	mocker := Mocker{target: reflect.ValueOf(builder.target), builder: builder}
-	mocker.buildHook(builder)
+	mocker.buildHook()
 	mocker.Patch()
 	return &mocker
 }
@@ -170,24 +156,78 @@ func (mocker *Mocker) checkReceiver(target reflect.Type, hook interface{}) bool 
 	return false
 }
 
-func (mocker *Mocker) buildHook(builder *MockBuilder) {
-	when := builder.when
-	hook := builder.hook
+func (mocker *Mocker) buildHook() {
+	proxySetter := mocker.buildProxy()
 
+	origin := reflect.ValueOf(mocker.proxy).Elem()
+	originExec := func(args []reflect.Value) []reflect.Value {
+		return tool.ReflectCall(origin, args)
+	}
+
+	match := []func(args []reflect.Value) bool{}
+	exec := []func(args []reflect.Value) []reflect.Value{}
+
+	for _, condition := range mocker.builder.conditions {
+		when := condition.when
+		hook := condition.hook
+
+		if when == nil {
+			// when condition is not set, just go into hook exec
+			match = append(match, func(args []reflect.Value) bool { return true })
+		} else {
+			missWhenReceiver := mocker.checkReceiver(mocker.target.Type(), when)
+			match = append(match, func(args []reflect.Value) bool {
+				return tool.ReflectCallWithShiftOne(reflect.ValueOf(when), args, missWhenReceiver)[0].Bool()
+			})
+		}
+
+		if hook == nil {
+			exec = append(exec, originExec)
+		} else {
+			missHookReceiver := mocker.checkReceiver(mocker.target.Type(), hook)
+			exec = append(exec, func(args []reflect.Value) []reflect.Value {
+				mocker.mock()
+				return tool.ReflectCallWithShiftOne(reflect.ValueOf(hook), args, missHookReceiver)
+			})
+		}
+	}
+
+	mockerHook := reflect.MakeFunc(mocker.target.Type(), func(args []reflect.Value) []reflect.Value {
+		proxySetter(args) // 设置origin调用proxy
+
+		mocker.access()
+		switch mocker.builder.filterGoroutine {
+		case Disable:
+			break
+		case Include:
+			if tool.GetGoroutineID() != mocker.builder.gId {
+				return originExec(args)
+			}
+		case Exclude:
+			if tool.GetGoroutineID() == mocker.builder.gId {
+				return originExec(args)
+			}
+		}
+
+		for i, matchFn := range match {
+			execFn := exec[i]
+			if matchFn(args) {
+				return execFn(args)
+			}
+		}
+
+		return originExec(args)
+	})
+	mocker.hook = mockerHook
+}
+
+func (mocker *Mocker) buildProxy() func(args []reflect.Value) {
 	proxy := reflect.New(mocker.target.Type())
 
-	var missWhenReceiver, missHookReceiver, missProxyReceiver bool
-	if when != nil {
-		missWhenReceiver = mocker.checkReceiver(mocker.target.Type(), when)
-	}
-	if hook != nil {
-		missHookReceiver = mocker.checkReceiver(mocker.target.Type(), hook)
-	}
-
 	proxyCallerSetter := func(args []reflect.Value) {}
-
-	if builder.proxyCaller != nil {
-		pVal := reflect.ValueOf(builder.proxyCaller)
+	missProxyReceiver := false
+	if mocker.builder.proxyCaller != nil {
+		pVal := reflect.ValueOf(mocker.builder.proxyCaller)
 		tool.Assert(pVal.Kind() == reflect.Ptr && pVal.Elem().Kind() == reflect.Func, "origin receiver must be a function pointer")
 		pElem := pVal.Elem()
 		missProxyReceiver = mocker.checkReceiver(mocker.target.Type(), pElem.Interface())
@@ -206,50 +246,8 @@ func (mocker *Mocker) buildHook(builder *MockBuilder) {
 			}
 		}
 	}
-
-	mockerHook := reflect.MakeFunc(mocker.target.Type(), func(args []reflect.Value) []reflect.Value {
-		proxyCallerSetter(args) // 设置origin调用proxy
-
-		origin := proxy.Elem()
-		mocker.access()
-
-		switch builder.filterGoroutine {
-		case Disable:
-			break
-		case Include:
-			if tool.GetGoroutineID() != builder.gId {
-				return tool.ReflectCall(origin, args)
-			}
-		case Exclude:
-			if tool.GetGoroutineID() == builder.gId {
-				return tool.ReflectCall(origin, args)
-			}
-		}
-
-		var hVal reflect.Value
-
-		if when != nil {
-			wVal := reflect.ValueOf(when)
-			ret := tool.ReflectCallWithShiftOne(wVal, args, missWhenReceiver)
-			b := ret[0].Bool()
-
-			if b && hook != nil {
-				hVal = reflect.ValueOf(hook)
-				mocker.mock()
-				return tool.ReflectCallWithShiftOne(hVal, args, missHookReceiver)
-			}
-			return tool.ReflectCall(origin, args)
-		}
-		if hook == nil {
-			return tool.ReflectCall(origin, args)
-		} else {
-			hVal = reflect.ValueOf(hook)
-		}
-		mocker.mock()
-		return tool.ReflectCallWithShiftOne(hVal, args, missHookReceiver)
-	})
-	mocker.hook = mockerHook
 	mocker.proxy = proxy.Interface()
+	return proxyCallerSetter
 }
 
 func (mocker *Mocker) Patch() *Mocker {
@@ -275,10 +273,16 @@ func (mocker *Mocker) UnPatch() *Mocker {
 	mocker.patch.Unpatch()
 	mocker.isPatched = false
 	removeFromGlobal(mocker)
-	mocker.times = 0
-	mocker.mockTimes = 0
+	atomic.StoreInt64(&mocker.times, 0)
+	atomic.StoreInt64(&mocker.mockTimes, 0)
 
 	return mocker
+}
+
+func (mocker *Mocker) Release() *MockBuilder {
+	mocker.UnPatch()
+	mocker.builder.resetCondition()
+	return mocker.builder
 }
 
 func (mocker *Mocker) ExcludeCurrentGoRoutine() *Mocker {
@@ -300,20 +304,26 @@ func (mocker *Mocker) IncludeCurrentGoRoutine() *Mocker {
 }
 
 func (mocker *Mocker) When(when interface{}) *Mocker {
+	tool.Assert(len(mocker.builder.conditions) == 1, "only one-condition mocker could reset when (You can call Release first, then rebuild mocker)")
+
 	return mocker.rePatch(func() {
-		mocker.builder.setWhen(when)
+		mocker.builder.conditions[0].SetWhenForce(when)
 	})
 }
 
 func (mocker *Mocker) To(to interface{}) *Mocker {
+	tool.Assert(len(mocker.builder.conditions) == 1, "only one-condition mocker could reset to  (You can call Release first, then rebuild mocker)")
+
 	return mocker.rePatch(func() {
-		mocker.builder.setTo(to)
+		mocker.builder.conditions[0].SetToForce(to)
 	})
 }
 
 func (mocker *Mocker) Return(results ...interface{}) *Mocker {
+	tool.Assert(len(mocker.builder.conditions) == 1, "only one-condition mocker could reset return  (You can call Release first, then rebuild mocker)")
+
 	return mocker.rePatch(func() {
-		mocker.builder.setReturn(results...)
+		mocker.builder.conditions[0].SetReturnForce(results...)
 	})
 }
 
@@ -326,29 +336,25 @@ func (mocker *Mocker) Origin(funcPtr interface{}) *Mocker {
 func (mocker *Mocker) rePatch(do func()) *Mocker {
 	mocker.UnPatch()
 	do()
-	mocker.buildHook(mocker.builder)
+	mocker.buildHook()
 	mocker.Patch()
 	return mocker
 }
 
 func (mocker *Mocker) access() {
-	mocker.lock.Lock()
-	mocker.times++
-	mocker.lock.Unlock()
+	atomic.AddInt64(&mocker.times, 1)
 }
 
 func (mocker *Mocker) mock() {
-	mocker.lock.Lock()
-	mocker.mockTimes++
-	mocker.lock.Unlock()
+	atomic.AddInt64(&mocker.mockTimes, 1)
 }
 
 func (mocker *Mocker) Times() int {
-	return mocker.times
+	return int(mocker.times)
 }
 
 func (mocker *Mocker) MockTimes() int {
-	return mocker.mockTimes
+	return int(mocker.mockTimes)
 }
 
 func (mocker *Mocker) key() uintptr {
