@@ -53,9 +53,18 @@ func (m *mockCondition) SetReturn(results ...interface{}) {
 }
 
 func (m *mockCondition) SetReturnForce(results ...interface{}) {
-	tool.CheckReturnType(m.builder.target, results...)
+	getResult := func() []interface{} { return results }
+	if len(results) == 1 {
+		seq, ok := results[0].(SequenceOpt)
+		if ok {
+			getResult = seq.GetNext
+		}
+	}
+
 	targetType := reflect.TypeOf(m.builder.target)
 	m.hook = reflect.MakeFunc(targetType, func(args []reflect.Value) []reflect.Value {
+		results := getResult()
+		tool.CheckReturnType(m.builder.target, results...)
 		valueResults := make([]reflect.Value, 0)
 		for i, result := range results {
 			rValue := reflect.Zero(targetType.Out(i))
