@@ -105,11 +105,54 @@ func (builder *MockBuilder) newCondition() *mockCondition {
 	return &mockCondition{builder: builder}
 }
 
+// When declares the condition hook that's called to determine whether the mock should be executed.
+//
+// The condition hook function must have the same parameters as the target function.
+//
+// The following example would execute the mock when input int is negative
+//
+//	func Fun(input int) string {
+//		return strconv.Itoa(input)
+//	}
+//	Mock(Fun).When(func(input int) bool { return input < 0 }).Return("0").Build()
+//
+// Note that if the target function is a struct method, you may optionally include
+// the receiver as the first argument of the condition hook function. For example,
+//
+//	type Foo struct {
+//		Age int
+//	}
+//	func (f *Foo) GetAge(younger int) string {
+//		return strconv.Itoa(f.Age - younger)
+//	}
+//	Mock((*Foo).GetAge).When(func(f *Foo, younger int) bool { return younger < 0 }).Return("0").Build()
 func (builder *MockBuilder) When(when interface{}) *MockBuilder {
 	builder.lastCondition().SetWhen(when)
 	return builder
 }
 
+// To declares the hook function that's called to replace the target function.
+//
+// The hook function must have the same signature as the target function.
+//
+// The following example would make Fun always return true
+//
+//	func Fun(input string) bool {
+//		return input == "fun"
+//	}
+//
+//	Mock(Fun).To(func(_ string) bool {return true}).Build()
+//
+// Note that if the target function is a struct method, you may optionally include
+// the receiver as the first argument of the hook function. For example,
+//
+//	type Foo struct {
+//		Name string
+//	}
+//	func (f *Foo) Bar(other string) bool {
+//		return other == f.Name
+//	}
+//	Mock((*Foo).Bar).To(func(f *Foo, other string) bool {return true}).Build()
 func (builder *MockBuilder) To(hook interface{}) *MockBuilder {
 	builder.lastCondition().SetTo(hook)
 	return builder
