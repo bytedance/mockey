@@ -56,13 +56,18 @@ type MockBuilder struct {
 	filterGoroutine FilterGoroutineType
 	gId             int64
 	unsafe          bool
+	generic         bool
 }
 
-func Mock(target interface{}) *MockBuilder {
+func Mock(target interface{}, opt ...optionFn) *MockBuilder {
 	tool.AssertFunc(target)
 
+	option := resolveOpt(opt...)
+
 	builder := &MockBuilder{
-		target: target,
+		target:  target,
+		unsafe:  option.unsafe,
+		generic: option.generic,
 	}
 	builder.resetCondition()
 	return builder
@@ -71,9 +76,7 @@ func Mock(target interface{}) *MockBuilder {
 // MockUnsafe has the full ability of the Mock function and removes some security restrictions. This is an alternative
 // when the Mock function fails. It may cause some unknown problems, so we recommend using Mock under normal conditions.
 func MockUnsafe(target interface{}) *MockBuilder {
-	builder := Mock(target)
-	builder.unsafe = true
-	return builder
+	return Mock(target, OptionUnsafe)
 }
 
 func (builder *MockBuilder) resetCondition() *MockBuilder {
@@ -299,7 +302,7 @@ func (mocker *Mocker) Patch() *Mocker {
 	if mocker.isPatched {
 		return mocker
 	}
-	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, reflect.ValueOf(mocker.proxy), mocker.builder.unsafe)
+	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, reflect.ValueOf(mocker.proxy), mocker.builder.unsafe, mocker.builder.generic)
 	mocker.isPatched = true
 	addToGlobal(mocker)
 
