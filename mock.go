@@ -76,7 +76,7 @@ func Mock(target interface{}, opt ...optionFn) *MockBuilder {
 // MockUnsafe has the full ability of the Mock function and removes some security restrictions. This is an alternative
 // when the Mock function fails. It may cause some unknown problems, so we recommend using Mock under normal conditions.
 func MockUnsafe(target interface{}) *MockBuilder {
-	return Mock(target, OptionUnsafe)
+	return Mock(target, OptUnsafe)
 }
 
 func (builder *MockBuilder) resetCondition() *MockBuilder {
