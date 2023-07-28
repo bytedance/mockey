@@ -52,8 +52,8 @@ func TestGeneric(t *testing.T) {
 			convey.So(sum[float64](1, 2), convey.ShouldEqual, 888)
 		})
 		PatchConvey("type", func() {
-			Mock((generic[int]).Value, OptionGeneric).Return(999).Build()
-			Mock(GetMethod(generic[string]{}, "Value2"), OptionGeneric).To(func() string {
+			Mock((generic[int]).Value, OptGeneric).Return(999).Build()
+			Mock(GetMethod(generic[string]{}, "Value2"), OptGeneric).To(func() string {
 				return "mock"
 			}).Build()
 			gi := generic[int]{a: 123}

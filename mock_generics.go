@@ -17,5 +17,5 @@
 package mockey
 
 func MockGeneric(target interface{}) *MockBuilder {
-	return Mock(target, OptionGeneric)
+	return Mock(target, OptGeneric)
 }

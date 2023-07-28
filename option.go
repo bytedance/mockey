@@ -23,11 +23,11 @@ type option struct {
 
 type optionFn func(*option)
 
-var OptionUnsafe optionFn = func(o *option) {
+func OptUnsafe(o *option) {
 	o.unsafe = true
 }
 
-var OptionGeneric optionFn = func(o *option) {
+func OptGeneric(o *option) {
 	o.generic = true
 }
 
