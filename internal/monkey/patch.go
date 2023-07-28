@@ -41,13 +41,17 @@ func (p *Patch) Unpatch() {
 
 // PatchValue replace the target function with a hook function, and stores the target function in the proxy function
 // for future restore. Target and hook are values of function. Proxy is a value of proxy function pointer.
-func PatchValue(target, hook, proxy reflect.Value, unsafe bool) *Patch {
+func PatchValue(target, hook, proxy reflect.Value, unsafe, generic bool) *Patch {
 	tool.Assert(hook.Kind() == reflect.Func, "'%s' is not a function", hook.Kind())
 	tool.Assert(proxy.Kind() == reflect.Ptr, "'%v' is not a function pointer", proxy.Kind())
 	tool.Assert(hook.Type() == target.Type(), "'%v' and '%s' mismatch", hook.Type(), target.Type())
 	tool.Assert(proxy.Elem().Type() == target.Type(), "'*%v' and '%s' mismatch", proxy.Elem().Type(), target.Type())
 
 	targetAddr := target.Pointer()
+	if generic {
+		// we assume that generic call/bl op is located in first 200 bytes of codes from targetAddr
+		targetAddr = inst.GetGenericJumpAddr(targetAddr, 200)
+	}
 	// The first few bytes of the target function code
 	const bufSize = 64
 	targetCodeBuf := common.BytesOf(targetAddr, bufSize)
@@ -76,5 +80,5 @@ func PatchValue(target, hook, proxy reflect.Value, unsafe bool) *Patch {
 func PatchFunc(fn, hook, proxy interface{}, unsafe bool) *Patch {
 	vv := reflect.ValueOf(fn)
 	tool.Assert(vv.Kind() == reflect.Func, "'%v' is not a function", fn)
-	return PatchValue(vv, reflect.ValueOf(hook), reflect.ValueOf(proxy), unsafe)
+	return PatchValue(vv, reflect.ValueOf(hook), reflect.ValueOf(proxy), unsafe, false)
 }

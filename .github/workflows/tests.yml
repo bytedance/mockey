@@ -1,20 +1,20 @@
 name: Tests
 
-on: [ pull_request ]
+on: [pull_request]
 
 jobs:
   unit-benchmark-test:
     strategy:
       matrix:
         go: ["1.13", "1.14", "1.15", "1.16", "1.17", "1.18", "1.19", "1.20"]
-        os: [ linux ] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
-        arch: [ X64, ARM64 ]
+        os: [linux] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
+        arch: [X64, ARM64]
         exclude:
           - os: Linux
             arch: ARM64
           - os: Windows
             arch: ARM64
-    runs-on: [ "${{ matrix.os }}", "${{ matrix.arch }}" ]
+    runs-on: ["${{ matrix.os }}", "${{ matrix.arch }}"]
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go
@@ -22,6 +22,6 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - name: Unit Test
-        run: go test -gcflags="all=-l -N" -covermode=atomic -coverprofile=coverage.out ./...
+        run: MOCKEY_DEBUG=true go test -gcflags="all=-l -N" -covermode=atomic -coverprofile=coverage.out ./...
       - name: Benchmark
         run: go test -bench=. -benchmem -run=none ./...
