@@ -24,10 +24,15 @@ func BranchTo(to uintptr) (res []byte) {
 	return
 }
 
+// create a branch into command
+//
+// Go supports passing function arguments from go 1.17 (see https://go.dev/doc/go1.17).
+// We could not use x0~x18 register. As an alternative, we use R19 register (see https://go.googlesource.com/go/+/refs/heads/master/src/cmd/compile/abi-internal.md).
 func BranchInto(to uintptr) (res []byte) {
+	// do not use x0~x18
 	res = append(res, x26MOV(to)...)                     // MOV x26, to // fake
-	res = append(res, []byte{0x4a, 0x03, 0x40, 0xf9}...) // LDR x10, [x26]
-	res = append(res, []byte{0x40, 0x01, 0x1f, 0xd6}...) // BR x10
+	res = append(res, []byte{0x53, 0x03, 0x40, 0xf9}...) // LDR x19, [x26]
+	res = append(res, []byte{0x60, 0x02, 0x1f, 0xd6}...) // BR x19
 	return
 }
 
