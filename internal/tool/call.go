@@ -34,13 +34,8 @@ func ReflectCall(f reflect.Value, args []reflect.Value) []reflect.Value {
 		for i := 0; i < len(args)-1; i++ {
 			newArgs = append(newArgs, args[i])
 		}
-		// FIXME: There are a few cases that lastArgs.cap == 0 but lastArg.len == MAX_INT (arm64).
-		// 		Currently we have no idea how it happens.
-		//      In that case we assume that i should less than lastArg.cap
-		if lastArg.Len() < lastArg.Cap() {
-			DebugPrintf("ReflectCall: broken variadic params: len is %d but cap is %d", lastArg.Len(), lastArg.Cap())
-		}
-		for i := 0; i < lastArg.Len() && i < lastArg.Cap(); i++ {
+
+		for i := 0; i < lastArg.Len(); i++ {
 			newArgs = append(newArgs, lastArg.Index(i))
 		}
 		return f.Call(newArgs)
