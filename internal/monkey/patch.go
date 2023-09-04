@@ -50,7 +50,7 @@ func PatchValue(target, hook, proxy reflect.Value, unsafe, generic bool) *Patch 
 	targetAddr := target.Pointer()
 	if generic {
 		// we assume that generic call/bl op is located in first 200 bytes of codes from targetAddr
-		targetAddr = inst.GetGenericJumpAddr(targetAddr, 200)
+		targetAddr = inst.GetGenericJumpAddr(targetAddr, 10000)
 	}
 	// The first few bytes of the target function code
 	const bufSize = 64

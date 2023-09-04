@@ -36,7 +36,14 @@ func (c CallerInfo) String() string {
 //	func innerBar() CallerInfo { /*do some thing*/ return Caller() }
 //
 // The return value of innerBar should represent the line in a/b/foo.go where a/b/foo.Foo calls a/c/bar.Bar
-func OuterCaller() CallerInfo {
+func OuterCaller() (info CallerInfo) {
+	defer func() {
+		if err := recover(); err != nil {
+			DebugPrintf("OuterCaller: get stack failed, err: %v", err)
+			info = CallerInfo(runtime.Frame{File: "Nan"})
+		}
+	}()
+
 	caller, _, _, _ := runtime.Caller(1)
 	oriPkg, _ := getPackageAndFunction(caller)
 
@@ -65,7 +72,11 @@ func getPackageAndFunction(pc uintptr) (string, string) {
 	packageName := ""
 	funcName := parts[pl-1]
 
-	if parts[pl-2][0] == '(' {
+	// if mock run in an anonymous function of a global variable,
+	// the stack will looks like a.b.c.glob..func1(), so the
+	// second last part of the caller stack would not be guaranteed
+	// always to be non-empty.
+	if len(parts[pl-2]) > 0 && parts[pl-2][0] == '(' {
 		funcName = parts[pl-2] + "." + funcName
 		packageName = strings.Join(parts[0:pl-2], ".")
 	} else {

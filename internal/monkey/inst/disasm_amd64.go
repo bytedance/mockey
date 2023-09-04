@@ -17,12 +17,56 @@
 package inst
 
 import (
+	"reflect"
 	"unsafe"
 
 	"github.com/bytedance/mockey/internal/monkey/common"
 	"github.com/bytedance/mockey/internal/tool"
 	"golang.org/x/arch/x86/x86asm"
 )
+
+//go:linkname duffcopy runtime.duffcopy
+func duffcopy()
+
+//go:linkname duffzero runtime.duffzero
+func duffzero()
+
+var duffcopyStart, duffcopyEnd, duffzeroStart, duffzeroEnd uintptr
+
+func init() {
+	duffcopyStart, duffcopyEnd = calcFnAddrRange("duffcopy", duffcopy)
+	duffzeroStart, duffzeroEnd = calcFnAddrRange("duffzero", duffzero)
+}
+
+func calcFnAddrRange(name string, fn func()) (uintptr, uintptr) {
+	v := reflect.ValueOf(fn)
+	var start, end uintptr
+	start = v.Pointer()
+	maxScan := 2000
+	code := common.BytesOf(v.Pointer(), 2000)
+	pos := 0
+
+	for pos < maxScan {
+		inst, err := x86asm.Decode(code[pos:], 64)
+		tool.Assert(err == nil, err)
+
+		args := []interface{}{name, inst.Op}
+		for i := range inst.Args {
+			args = append(args, inst.Args[i])
+		}
+		tool.DebugPrintf("init: <%v>\t%v\t%v\t%v\t%v\t%v\t%v\n", args...)
+
+		if inst.Op == x86asm.RET {
+			end = start + uintptr(pos)
+			tool.DebugPrintf("init: %v(%v,%v)\n", name, start, end)
+			return start, end
+		}
+
+		pos += int(inst.Len)
+	}
+	tool.Assert(false, "%v ret not found", name)
+	return 0, 0
+}
 
 func Disassemble(code []byte, required int, checkLen bool) int {
 	var pos int
@@ -45,26 +89,53 @@ func GetGenericJumpAddr(addr uintptr, maxScan uint64) uintptr {
 	var err error
 	var inst x86asm.Inst
 
+	allAddrs := []uintptr{}
 	for pos < maxScan {
 		inst, err = x86asm.Decode(code[pos:], 64)
 		tool.Assert(err == nil, err)
-		// if inst.Op == arm64asm.BL {
+
 		args := []interface{}{inst.Op}
 		for i := range inst.Args {
 			args = append(args, inst.Args[i])
 		}
 		tool.DebugPrintf("%v\t%v\t%v\t%v\t%v\t%v\n", args...)
 
+		if inst.Op == x86asm.RET {
+			break
+		}
+
 		if inst.Op == x86asm.CALL {
 			rel := int32(inst.Args[0].(x86asm.Rel))
-			tool.DebugPrintf("found: CALL, raw is: %x, rel: %v\n", inst.String(), rel)
-			return calcAddr(uintptr(unsafe.Pointer(&code[0]))+uintptr(pos+uint64(inst.Len)), rel)
+			fnAddr := calcAddr(uintptr(unsafe.Pointer(&code[0]))+uintptr(pos+uint64(inst.Len)), rel)
+
+			/*
+				When function argument size is too big, golang will use duff-copy
+				to get better performance. Thus we will see more call-instruction
+				in asm code.
+				For example, assume struct type like this:
+					```
+					type Large15 struct _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ string}
+					```
+				when we use `Large15` as generic function's argument or return types,
+				the wrapper `function[Large15]` will call `duffcopy` and `duffzero`
+				before passing arguments and after receiving returns.
+
+				Notice that `duff` functions are very special, they are always called
+				in the middle of function body(not at beginning). So we should check
+				the `call` instruction's target address with a range.
+			*/
+
+			isDuffCopy := (fnAddr >= duffcopyStart && fnAddr <= duffcopyEnd)
+			isDuffZero := (fnAddr >= duffzeroStart && fnAddr <= duffzeroEnd)
+			tool.DebugPrintf("found: CALL, raw is: %x, rel: %v  isDuffCopy: %v, isDuffZero: %v fnAddr: %v\n", inst.String(), rel, isDuffCopy, isDuffZero, fnAddr)
+			if !isDuffCopy && !isDuffZero {
+				allAddrs = append(allAddrs, fnAddr)
+			}
 		}
-		tool.Assert(inst.Op != x86asm.RET, "!!!FOUND RET!!!")
 		pos += uint64(inst.Len)
 	}
-	tool.Assert(false, "CALL op not found")
-	return 0
+	tool.Assert(len(allAddrs) == 1, "invalid callAddr: %v", allAddrs)
+	return allAddrs[0]
 }
 
 func calcAddr(from uintptr, rel int32) uintptr {
