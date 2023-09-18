@@ -1,3 +1,6 @@
+//go:build go1.21
+// +build go1.21
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -20,8 +23,13 @@ import (
 	_ "unsafe"
 )
 
-//go:linkname StopTheWorld runtime.stopTheWorld
-func StopTheWorld()
+func StopTheWorld() {
+	const stwForTestResetDebugLog = 16
+	stopTheWorld(stwForTestResetDebugLog)
+}
+
+//go:linkname stopTheWorld runtime.stopTheWorld
+func stopTheWorld(reason uint8)
 
 //go:linkname StartTheWorld runtime.startTheWorld
 func StartTheWorld()
