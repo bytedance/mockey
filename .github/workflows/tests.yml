@@ -6,7 +6,18 @@ jobs:
   unit-benchmark-test:
     strategy:
       matrix:
-        go: ["1.13", "1.14", "1.15", "1.16", "1.17", "1.18", "1.19", "1.20"]
+        go:
+          [
+            "1.13",
+            "1.14",
+            "1.15",
+            "1.16",
+            "1.17",
+            "1.18",
+            "1.19",
+            "1.20",
+            "1.21",
+          ]
         os: [linux] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
         arch: [X64, ARM64]
         exclude:
