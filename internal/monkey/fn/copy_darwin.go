@@ -31,7 +31,7 @@ func Copy(targetPtr, oriFn interface{}) {
 	targetType := targetVal.Type().Elem()
 	tool.Assert(targetType.Kind() == reflect.Func, "'%v' is not a function pointer", targetPtr)
 	oriVal := reflect.ValueOf(oriFn)
-	tool.Assert(tool.CheckFuncArgs(targetType, oriVal.Type(), 0), "target and ori not match")
+	tool.Assert(tool.CheckFuncArgs(targetType, oriVal.Type(), 0, 0), "target and ori not match")
 
 	oriAddr := oriVal.Pointer()
 	tool.DebugPrintf("Copy: copy start for %v\n", runtime.FuncForPC(oriAddr).Name())

@@ -44,8 +44,6 @@ func (p *Patch) Unpatch() {
 func PatchValue(target, hook, proxy reflect.Value, unsafe, generic bool) *Patch {
 	tool.Assert(hook.Kind() == reflect.Func, "'%s' is not a function", hook.Kind())
 	tool.Assert(proxy.Kind() == reflect.Ptr, "'%v' is not a function pointer", proxy.Kind())
-	tool.Assert(hook.Type() == target.Type(), "'%v' and '%s' mismatch", hook.Type(), target.Type())
-	tool.Assert(proxy.Elem().Type() == target.Type(), "'*%v' and '%s' mismatch", proxy.Elem().Type(), target.Type())
 
 	targetAddr := target.Pointer()
 	if generic {

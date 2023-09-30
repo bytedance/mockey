@@ -20,13 +20,6 @@ import (
 	"reflect"
 )
 
-func ReflectCallWithShiftOne(f reflect.Value, args []reflect.Value, shift bool) []reflect.Value {
-	if shift {
-		return ReflectCall(f, args[1:])
-	}
-	return ReflectCall(f, args)
-}
-
 func ReflectCall(f reflect.Value, args []reflect.Value) []reflect.Value {
 	if f.Type().IsVariadic() {
 		newArgs := make([]reflect.Value, 0)
