@@ -28,7 +28,7 @@ import (
 func Write(target uintptr, data []byte) error {
 	targetPage := common.PageOf(target)
 	fnPage := common.PageOf(reflect.ValueOf(write).Pointer())
-	tool.DebugPrintf("Write: target page(0x%x), fn page(0x%x)\n", targetPage, fnPage)
+	tool.DebugPrintf("Write: target page(0x%x), fn page(0x%x), len(%v)\n", targetPage, fnPage, len(data))
 	res := write(target, common.PtrOf(data), len(data), targetPage, common.PageSize(), syscall.PROT_READ|syscall.PROT_EXEC)
 	if res != 0 {
 		return fmt.Errorf("write failed, code %v", res)
