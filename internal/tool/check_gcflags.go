@@ -27,8 +27,8 @@ func init() {
 
 func checkGCflags() int {
 	if flag := os.Getenv("MOCKEY_CHECK_GCFLAGS"); flag != "false" && !IsGCFlagsSet() {
-		panic(`
-Mockey init failed, did you forget to add -gcflags="all=-N -l" ?
+		println(`
+Mockey check failed, please add -gcflags="all=-N -l".
 (Set env MOCKEY_CHECK_GCFLAGS=false to disable gcflags check) 
 		`)
 	}
