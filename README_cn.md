@@ -85,7 +85,7 @@ Mockey 基于[Apache License 2.0](https://github.com/bytedance/mockey/blob/main/
 1. 命令行：`go test -gcflags="all=-l -N" -v ./...`
 2. Goland：在 **运行/调试配置 > Go工具实参** 对话框中填写 `-gcflags="all=-l -N"` 
 
-### Mock 后函数后仍走入了原函数？
+### Mock 函数后仍走入了原函数？
 1. 未禁用内联或者编译优化：可以尝试使用 debug 模式，如果能跑过则说明是该问题，请转到 FAQ [相关章节](#如何禁用内联和编译优化)
 2. 未调用`Build()`方法：mock 函数时漏写了`.Build()`，导致没有任何实际效果产生
 3. 目标函数不完全匹配：
