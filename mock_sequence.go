@@ -19,7 +19,7 @@ package mockey
 import "github.com/bytedance/mockey/internal/tool"
 
 type SequenceOpt interface {
-	// make sure it is mockey private interface
+	// Private make sure it is mockey private interface
 	Private
 	// GetNext is used by mockey, don't use it if you don't know what it does
 	GetNext() []interface{}

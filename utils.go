@@ -73,8 +73,8 @@ func getFieldMethod(instance interface{}, fieldName string) (interface{}, bool) 
 	return carrier.Interface(), true
 }
 
-// GetPrivateMethod ...
-// Deprecated, use GetMethod instead.
+// GetPrivateMethod resolve a certain public method from an instance.
+// Deprecated, this is an old API in mockito. Please use GetMethod instead.
 func GetPrivateMethod(instance interface{}, methodName string) interface{} {
 	m, ok := reflect.TypeOf(instance).MethodByName(methodName)
 	if ok {
@@ -86,7 +86,7 @@ func GetPrivateMethod(instance interface{}, methodName string) interface{} {
 
 // GetNestedMethod resolves a certain public method in anonymous structs, it will
 // look for the specific method in every anonymous struct field recursively.
-// Deprecated, use GetMethod instead.
+// Deprecated, this is an old API in mockito. Please use GetMethod instead.
 func GetNestedMethod(instance interface{}, methodName string) interface{} {
 	if typ := reflect.TypeOf(instance); typ != nil {
 		if m, ok := getNestedMethod(reflect.ValueOf(instance), methodName); ok {
@@ -127,8 +127,7 @@ func getNestedMethod(val reflect.Value, methodName string) (reflect.Method, bool
 	return reflect.PtrTo(typ).MethodByName(methodName)
 }
 
-// GetGoroutineId ...
-// Deprecated
+// GetGoroutineId gets the current goroutine ID
 func GetGoroutineId() int64 {
 	return tool.GetGoroutineID()
 }
