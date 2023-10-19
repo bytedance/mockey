@@ -98,3 +98,46 @@ func TestConvey(t *testing.T) {
 		})
 	})
 }
+
+func TestUnpatchAll_Convey(t *testing.T) {
+	fn1 := func() string {
+		return "fn1"
+	}
+	fn2 := func() string {
+		return "fn2"
+	}
+	fn3 := func() string {
+		return "fn3"
+	}
+
+	Mock(fn1).Return("mocked").Build()
+	if fn1() != "mocked" {
+		t.Error("mock fn1 failed")
+	}
+
+	PatchConvey("UnpatchAll_Convey", t, func() {
+		Mock(fn2).Return("mocked").Build()
+		Mock(fn3).Return("mocked").Build()
+		convey.So(fn1(), convey.ShouldEqual, "mocked")
+		convey.So(fn2(), convey.ShouldEqual, "mocked")
+		convey.So(fn3(), convey.ShouldEqual, "mocked")
+
+		UnPatchAll()
+
+		convey.So(fn1(), convey.ShouldEqual, "mocked")
+		convey.So(fn2(), convey.ShouldEqual, "fn2")
+		convey.So(fn3(), convey.ShouldEqual, "fn3")
+	})
+
+	r1, r2, r3 := fn1(), fn2(), fn3()
+	if r1 != "mocked" || r2 != "fn2" || r3 != "fn3" {
+		t.Error("mock failed", r1, r2, r3)
+	}
+
+	UnPatchAll()
+
+	r1, r2, r3 = fn1(), fn2(), fn3()
+	if r1 != "fn1" || r2 != "fn2" || r3 != "fn3" {
+		t.Error("mock failed", r1, r2, r3)
+	}
+}
