@@ -20,6 +20,8 @@
 package mockey
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/smartystreets/goconvey/convey"
@@ -37,29 +39,37 @@ func (g generic[T]) Value() T {
 	return g.a
 }
 
-func (g generic[T]) Value2() T {
+func (g generic[T]) Value2(hint string) T {
 	return g.a + g.a
 }
 
 func TestGeneric(t *testing.T) {
 	PatchConvey("generic", t, func() {
 		PatchConvey("func", func() {
+			arg1, arg2 := 1, 2
 			MockGeneric(sum[int]).To(func(a, b int) int {
+				convey.So(a, convey.ShouldEqual, arg1)
+				convey.So(b, convey.ShouldEqual, arg2)
 				return 999
 			}).Build()
-			MockGeneric(sum[float64]).Return(888).Build()
 			convey.So(sum[int](1, 2), convey.ShouldEqual, 999)
+
+			MockGeneric(sum[float64]).Return(888).Build()
 			convey.So(sum[float64](1, 2), convey.ShouldEqual, 888)
 		})
 		PatchConvey("type", func() {
 			Mock((generic[int]).Value, OptGeneric).Return(999).Build()
-			Mock(GetMethod(generic[string]{}, "Value2"), OptGeneric).To(func() string {
+			gi := generic[int]{a: 123}
+			convey.So(gi.Value(), convey.ShouldEqual, 999)
+
+			arg1 := "hint"
+			Mock(GetMethod(generic[string]{}, "Value2"), OptGeneric).To(func(hint string) string {
+				convey.So(hint, convey.ShouldEqual, arg1)
 				return "mock"
 			}).Build()
-			gi := generic[int]{a: 123}
 			gs := generic[string]{a: "abc"}
 			convey.So(gi.Value(), convey.ShouldEqual, 999)
-			convey.So(gs.Value2(), convey.ShouldEqual, "mock")
+			convey.So(gs.Value2(arg1), convey.ShouldEqual, "mock")
 		})
 	})
 }
@@ -102,6 +112,72 @@ func TestGenericArgRet(t *testing.T) {
 		GenericArgRetRunner[Large15[Large15[int]]]("Large15[Large15[int]")
 		GenericArgRetRunner[Large15[Large15[[100]byte]]]("Large15[Large15[[100]byte]")
 	})
+}
+
+func TestGenericArgValues(t *testing.T) {
+	PatchConvey("args-value", t, func() {
+		PatchConvey("single", func() {
+			var arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15 uintptr = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+			MockGeneric(GenericsArg15[uintptr]).To(func(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15 uintptr) {
+				convey.So(_1, convey.ShouldEqual, arg1)
+				convey.So(_2, convey.ShouldEqual, arg2)
+				convey.So(_3, convey.ShouldEqual, arg3)
+				convey.So(_4, convey.ShouldEqual, arg4)
+				convey.So(_5, convey.ShouldEqual, arg5)
+				convey.So(_6, convey.ShouldEqual, arg6)
+				convey.So(_7, convey.ShouldEqual, arg7)
+				convey.So(_8, convey.ShouldEqual, arg8)
+				convey.So(_9, convey.ShouldEqual, arg9)
+				convey.So(_10, convey.ShouldEqual, arg10)
+				convey.So(_11, convey.ShouldEqual, arg11)
+				convey.So(_12, convey.ShouldEqual, arg12)
+				convey.So(_13, convey.ShouldEqual, arg13)
+				convey.So(_14, convey.ShouldEqual, arg14)
+				convey.So(_15, convey.ShouldEqual, arg15)
+			}).Build()
+			GenericsArg15(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15)
+		})
+		PatchConvey("complex", func() {
+			var arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15 string = "1", "2", "3", "4", "5", " 6", "7", "8", "9", "10", "11", "12", "13", "14", "15"
+			MockGeneric(GenericsArg15[string]).To(func(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15 string) {
+				convey.So(_1, convey.ShouldEqual, arg1)
+				convey.So(_2, convey.ShouldEqual, arg2)
+				convey.So(_3, convey.ShouldEqual, arg3)
+				convey.So(_4, convey.ShouldEqual, arg4)
+				convey.So(_5, convey.ShouldEqual, arg5)
+				convey.So(_6, convey.ShouldEqual, arg6)
+				convey.So(_7, convey.ShouldEqual, arg7)
+				convey.So(_8, convey.ShouldEqual, arg8)
+				convey.So(_9, convey.ShouldEqual, arg9)
+				convey.So(_10, convey.ShouldEqual, arg10)
+				convey.So(_11, convey.ShouldEqual, arg11)
+				convey.So(_12, convey.ShouldEqual, arg12)
+				convey.So(_13, convey.ShouldEqual, arg13)
+				convey.So(_14, convey.ShouldEqual, arg14)
+				convey.So(_15, convey.ShouldEqual, arg15)
+			}).Build()
+			GenericsArg15(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15)
+		})
+		PatchConvey("args-type", func() {
+			target := GenericsTemplate[int, float32, string, chan (int), []byte, struct{ _ int }]
+			MockGeneric(target).To(
+				func(info GenericInfo, t1 int, t2 float32, t3 string) (r1 chan (int), r2 []byte, r3 struct{ _ int }) {
+					convey.So(info.UsedParamType(0), convey.ShouldEqual, reflect.TypeOf(t1))
+					convey.So(info.UsedParamType(1), convey.ShouldEqual, reflect.TypeOf(t2))
+					convey.So(info.UsedParamType(2), convey.ShouldEqual, reflect.TypeOf(t3))
+					convey.So(info.UsedParamType(3), convey.ShouldEqual, reflect.TypeOf(r1))
+					convey.So(info.UsedParamType(4), convey.ShouldEqual, reflect.TypeOf(r2))
+					convey.So(info.UsedParamType(5), convey.ShouldEqual, reflect.TypeOf(r3))
+					return
+				}).Build()
+			target(1, 2, "3")
+		})
+	})
+}
+
+func GenericsTemplate[T1, T2, T3, R1, R2, R3 any](t1 T1, t2 T2, t3 T3) (r1 R1, r2 R2, r3 R3) {
+	fmt.Println(t1, t2, t3, r1, r2, r3)
+	panic("not here")
 }
 
 func GenericsArg0[T any]()                                            { panic("0") }

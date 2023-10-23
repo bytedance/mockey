@@ -16,6 +16,39 @@
 
 package mockey
 
+import (
+	"reflect"
+	"unsafe"
+)
+
+// MockGeneric mocks generic function
+//
+// Target must be generic method or method of generic types
 func MockGeneric(target interface{}) *MockBuilder {
 	return Mock(target, OptGeneric)
+}
+
+type GenericInfo uintptr
+
+var genericInfoType = reflect.TypeOf(GenericInfo(0))
+
+func (g GenericInfo) Equal(other GenericInfo) bool {
+	return g == other
+}
+
+// UsedParamType get the type of used parameter in generic function/struct
+//
+// For example: assume we have generic function "f[int, float64](x int, y T1) T2" and derived type f[int, float64]:
+//
+//	UsedParamType(0) == reflect.TypeOf(int(0))
+//	UsedParamType(1) == reflect.TypeOf(float64(0))
+//
+// If index n is out of range, or the derived types have more complex structure(for example: define an generic struct
+// in a generic function using generic types, unused parameterized type etc.), this function may return unexpected value
+// or cause unrecoverable runtime error . So it is NOT RECOMMENDED to use this function unless you actually knows what
+// you are doing.
+func (g GenericInfo) UsedParamType(n uintptr) reflect.Type {
+	var vt interface{}
+	*(*uintptr)(unsafe.Pointer(&vt)) = *(*uintptr)(unsafe.Pointer(uintptr(g) + 8*n))
+	return reflect.TypeOf(vt)
 }
