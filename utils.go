@@ -21,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/bytedance/mockey/internal/tool"
+	"github.com/bytedance/mockey/internal/unsafereflect"
 )
 
 // GetMethod resolve a certain public method from an instance.
@@ -34,6 +35,10 @@ func GetMethod(instance interface{}, methodName string) interface{} {
 		}
 		if m, ok := getFieldMethod(instance, methodName); ok {
 			return m
+		}
+		ch0 := methodName[0]
+		if !(ch0 >= 'A' && ch0 <= 'Z') {
+			return unsafeMethodByName(instance, methodName)
 		}
 	}
 	tool.Assert(false, "can't reflect instance method :%v", methodName)
@@ -125,6 +130,44 @@ func getNestedMethod(val reflect.Value, methodName string) (reflect.Method, bool
 		return m, true
 	}
 	return reflect.PtrTo(typ).MethodByName(methodName)
+}
+
+// unsafeMethodByName resolve a method from an instance, include private method.
+//
+// THIS IS UNSAFE FOR LOWER GO VERSION(<1.12)
+//
+// for example:
+//
+//	unsafeMethodByName(&bytes.Buffer{}, "empty")
+//	unsafeMethodByName(sha256.New(), "checkSum")
+func unsafeMethodByName(instance interface{}, methodName string) interface{} {
+	typ, tfn, ok := unsafereflect.MethodByName(instance, methodName)
+	if !ok {
+		tool.Assert(false, "can't reflect instance method :%v", methodName)
+		return nil
+	}
+	if typ == nil {
+		tool.Assert(false, "failed to determine %v's type", methodName)
+	}
+
+	if typ.Kind() != reflect.Func {
+		tool.Assert(false, "invalid instance method type: %v,%v", methodName, typ.Kind().String())
+		return nil
+	}
+
+	in := []reflect.Type{reflect.TypeOf(instance)}
+	out := []reflect.Type{}
+	for i := 0; i < typ.NumIn(); i++ {
+		in = append(in, typ.In(i))
+	}
+	for i := 0; i < typ.NumOut(); i++ {
+		out = append(out, typ.Out(i))
+	}
+
+	hook := reflect.FuncOf(in, out, typ.IsVariadic())
+	vt := reflect.Zero(hook).Interface()
+	*(*uintptr)(unsafe.Pointer(uintptr(unsafe.Pointer(&vt)) + 8)) = uintptr(unsafe.Pointer(tfn))
+	return vt
 }
 
 // GetGoroutineId gets the current goroutine ID
