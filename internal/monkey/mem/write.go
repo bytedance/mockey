@@ -25,7 +25,23 @@ import (
 // world (only the current goroutine's P is running).
 func WriteWithSTW(target uintptr, data []byte) {
 	common.StopTheWorld()
-	defer common.StartTheWorld()
-	err := Write(target, data)
-	tool.Assert(err == nil, err)
+
+	begin := target
+	end := target + uintptr(len(data))
+	for begin < end {
+		if common.PageOf(begin) < common.PageOf(end) {
+			nextPage := common.PageOf(begin) + uintptr(common.PageSize())
+			buf := data[:nextPage-begin]
+			data = data[nextPage-begin:]
+			err := Write(begin, buf)
+			tool.Assert(err == nil, err)
+			begin += uintptr(len(buf))
+			continue
+		}
+		err := Write(begin, data)
+		tool.Assert(err == nil, err)
+		break
+	}
+
+	common.StartTheWorld()
 }
