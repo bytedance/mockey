@@ -24,21 +24,22 @@ import (
 	"unsafe"
 )
 
-func MethodByName(target interface{}, name string) (fn unsafe.Pointer, ok bool) {
-	r := castRType(target)
-	rt := toRType(r)
-	if r.Kind() == reflect.Interface {
-		return funcPointer(r.MethodByName(name))
-	}
+func MethodByName(target interface{}, name string) (typ reflect.Type, fn unsafe.Pointer, ok bool) {
+	r := reflect.TypeOf(target)
+	rt := (*rtype)((*struct {
+		_    uintptr
+		data unsafe.Pointer
+	})(unsafe.Pointer(&r)).data)
 
 	for _, p := range rt.methods() {
 		if rt.nameOff(p.name).name() == name {
-			return rt.Method(p), true
+			return toType(rt.typeOff(p.mtyp)), rt.Method(p), true
 		}
 	}
-	return nil, false
+	return nil, nil, false
 }
 
+// copy from src/reflect/type.go
 // rtype is the common implementation of most values.
 // It is embedded in other struct types.
 //
@@ -51,34 +52,15 @@ type rtype struct {
 	align      uint8   // alignment of variable with this type
 	fieldAlign uint8   // alignment of struct field with this type
 	kind       uint8   // enumeration for C
-	// function for comparing objects of this type
-	// (ptr to object A, ptr to object B) -> ==?
+
+	// In go 1.13 equal was replaced with "alg *typeAlg".
+	// Since size(func) == size(ptr), the total size of rtype
+	// and alignment of other field keeps the same, we do not
+	// need to make an adaption for go1.13.
 	equal     func(unsafe.Pointer, unsafe.Pointer) bool
 	gcdata    *byte   // garbage collection data
 	str       nameOff // string form
 	ptrToThis typeOff // type for pointer to this type, may be zero
-}
-
-func castRType(val interface{}) reflect.Type {
-	if rTypeVal, ok := val.(reflect.Type); ok {
-		return rTypeVal
-	}
-	return reflect.TypeOf(val)
-}
-
-func toRType(t reflect.Type) *rtype {
-	i := *(*funcValue)(unsafe.Pointer(&t))
-	r := (*rtype)(i.p)
-	return r
-}
-
-type funcValue struct {
-	_ uintptr
-	p unsafe.Pointer
-}
-
-func funcPointer(v reflect.Method, ok bool) (unsafe.Pointer, bool) {
-	return (*funcValue)(unsafe.Pointer(&v.Func)).p, ok
 }
 
 func (t *rtype) Method(p method) (fn unsafe.Pointer) {
@@ -91,10 +73,12 @@ const kindMask = (1 << 5) - 1
 
 func (t *rtype) Kind() reflect.Kind { return reflect.Kind(t.kind & kindMask) }
 
-type tflag uint8
-type nameOff int32 // offset to a name
-type typeOff int32 // offset to an *rtype
-type textOff int32 // offset from top of text section
+type (
+	tflag   uint8
+	nameOff int32 // offset to a name
+	typeOff int32 // offset to an *rtype
+	textOff int32 // offset from top of text section
+)
 
 // resolveNameOff resolves a name offset from a base pointer.
 // The (*rtype).nameOff method is a convenience wrapper for this function.
@@ -105,6 +89,26 @@ func resolveNameOff(unsafe.Pointer, int32) unsafe.Pointer
 
 func (t *rtype) nameOff(off nameOff) name {
 	return name{(*byte)(resolveNameOff(unsafe.Pointer(t), int32(off)))}
+}
+
+// resolveTypeOff resolves an *rtype offset from a base type.
+// The (*rtype).typeOff method is a convenience wrapper for this function.
+//
+//go:linkname resolveTypeOff reflect.resolveTypeOff
+func resolveTypeOff(rtype unsafe.Pointer, off int32) unsafe.Pointer
+
+func (t *rtype) typeOff(off typeOff) *rtype {
+	return (*rtype)(resolveTypeOff(unsafe.Pointer(t), int32(off)))
+}
+
+// toType convert rtype to reflect.Type
+//
+// The conversion is not guaranteed to be successful.
+// If conversion failed, response will be nil
+func toType(r *rtype) reflect.Type {
+	var vt interface{}
+	*(*uintptr)(unsafe.Pointer(&vt)) = uintptr(unsafe.Pointer(r))
+	return reflect.TypeOf(vt)
 }
 
 // resolveTextOff resolves a function pointer offset from a base type.
@@ -142,34 +146,6 @@ type funcType struct {
 	outCount uint16 // top bit is set if last input parameter is ...
 }
 
-func (t *funcType) in() []*rtype {
-	uadd := unsafe.Sizeof(*t)
-	if t.tflag&tflagUncommon != 0 {
-		uadd += unsafe.Sizeof(uncommonType{})
-	}
-	if t.inCount == 0 {
-		return nil
-	}
-	return (*[1 << 20]*rtype)(add(unsafe.Pointer(t), uadd, "t.inCount > 0"))[:t.inCount:t.inCount]
-}
-
-func (t *funcType) out() []*rtype {
-	uadd := unsafe.Sizeof(*t)
-	if t.tflag&tflagUncommon != 0 {
-		uadd += unsafe.Sizeof(uncommonType{})
-	}
-	outCount := t.outCount & (1<<15 - 1)
-	if outCount == 0 {
-		return nil
-	}
-	return (*[1 << 20]*rtype)(add(unsafe.Pointer(t), uadd, "outCount > 0"))[t.inCount : t.inCount+outCount : t.inCount+outCount]
-}
-
-func (t *rtype) IsVariadic() bool {
-	tt := (*funcType)(unsafe.Pointer(t))
-	return tt.outCount&(1<<15) != 0
-}
-
 func add(p unsafe.Pointer, x uintptr, whySafe string) unsafe.Pointer {
 	return unsafe.Pointer(uintptr(p) + x)
 }
@@ -182,8 +158,8 @@ type interfaceType struct {
 }
 
 type imethod struct {
-	name nameOff // name of method
-	typ  typeOff // .(*FuncType) underneath
+	_ nameOff // unused name of method
+	_ typeOff // unused .(*FuncType) underneath
 }
 
 func (t *rtype) methods() []method {
@@ -192,29 +168,25 @@ func (t *rtype) methods() []method {
 	}
 	switch t.Kind() {
 	case reflect.Ptr:
-		type u struct {
+		return (*struct {
 			ptrType
 			u uncommonType
-		}
-		return (*u)(unsafe.Pointer(t)).u.methods()
+		})(unsafe.Pointer(t)).u.methods()
 	case reflect.Func:
-		type u struct {
+		return (*struct {
 			funcType
 			u uncommonType
-		}
-		return (*u)(unsafe.Pointer(t)).u.methods()
+		})(unsafe.Pointer(t)).u.methods()
 	case reflect.Interface:
-		type u struct {
+		return (*struct {
 			interfaceType
 			u uncommonType
-		}
-		return (*u)(unsafe.Pointer(t)).u.methods()
+		})(unsafe.Pointer(t)).u.methods()
 	case reflect.Struct:
-		type u struct {
+		return (*struct {
 			structType
 			u uncommonType
-		}
-		return (*u)(unsafe.Pointer(t)).u.methods()
+		})(unsafe.Pointer(t)).u.methods()
 	default:
 		return nil
 	}
@@ -224,7 +196,7 @@ func (t *rtype) methods() []method {
 type method struct {
 	name nameOff // name of method
 	mtyp typeOff // method type (without receiver), not valid for private methods
-	ifn  textOff // fn used in interface call (one-word receiver)
+	_    textOff // unused fn used in interface call (one-word receiver)
 	tfn  textOff // fn used for normal method call
 }
 
@@ -237,9 +209,9 @@ func (t *uncommonType) methods() []method {
 
 // Struct field
 type structField struct {
-	name   name    // name is always non-empty
-	typ    *rtype  // type of field
-	offset uintptr // byte offset of field
+	_ name    // unused name is always non-empty
+	_ *rtype  // unused type of field
+	_ uintptr // unused byte offset of field
 }
 
 // structType
