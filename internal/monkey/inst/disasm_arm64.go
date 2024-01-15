@@ -25,19 +25,6 @@ import (
 	"golang.org/x/arch/arm64/arm64asm"
 )
 
-//go:linkname duffcopy runtime.duffcopy
-func duffcopy()
-
-//go:linkname duffzero runtime.duffzero
-func duffzero()
-
-var duffcopyStart, duffcopyEnd, duffzeroStart, duffzeroEnd uintptr
-
-func init() {
-	duffcopyStart, duffcopyEnd = calcFnAddrRange("duffcopy", duffcopy)
-	duffzeroStart, duffzeroEnd = calcFnAddrRange("duffzero", duffzero)
-}
-
 func calcFnAddrRange(name string, fn func()) (uintptr, uintptr) {
 	v := reflect.ValueOf(fn)
 	var start, end uintptr
@@ -57,7 +44,7 @@ func calcFnAddrRange(name string, fn func()) (uintptr, uintptr) {
 
 		if inst.Op == arm64asm.RET {
 			end = start + uintptr(pos)
-			tool.DebugPrintf("init: duffcopy(%v,%v)\n", name, start, end)
+			tool.DebugPrintf("init: %v(%v,%v)\n", name, start, end)
 			return start, end
 		}
 
@@ -94,28 +81,9 @@ func GetGenericJumpAddr(addr uintptr, maxScan uint64) uintptr {
 
 		if inst.Op == arm64asm.BL {
 			fnAddr := calcAddr(uintptr(unsafe.Pointer(&code[0]))+uintptr(pos), inst.Enc)
-
-			/*
-				When function argument size is too big, golang will use duff-copy
-				to get better performance. Thus we will see more call-instruction
-				in asm code.
-				For example, assume struct type like this:
-					```
-					type Large15 struct _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ string}
-					```
-				when we use `Large15` as generic function's argument or return types,
-				the wrapper `function[Large15]` will call `duffcopy` and `duffzero`
-				before passing arguments and after receiving returns.
-
-				Notice that `duff` functions are very special, they are always called
-				in the middle of function body(not at beginning). So we should check
-				the `call` instruction's target address with a range.
-			*/
-
-			isDuffCopy := (fnAddr >= duffcopyStart && fnAddr <= duffcopyEnd)
-			isDuffZero := (fnAddr >= duffzeroStart && fnAddr <= duffzeroEnd)
-			tool.DebugPrintf("found: BL, raw is: %x,  isDuffCopy: %v, isDuffZero: %v fnAddr: %v\n", inst.String(), isDuffCopy, isDuffZero, fnAddr)
-			if !isDuffCopy && !isDuffZero {
+			isExtraCall, extraName := isGenericProxyCallExtra(fnAddr)
+			tool.DebugPrintf("found BL, raw is: %x,  fnAddr: %v, isExtraCall: %v, extraName: %v\n", inst.String(), fnAddr, isExtraCall, extraName)
+			if !isExtraCall {
 				allAddrs = append(allAddrs, fnAddr)
 			}
 		}

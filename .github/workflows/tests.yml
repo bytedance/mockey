@@ -6,18 +6,40 @@ jobs:
   unit-benchmark-test:
     strategy:
       matrix:
-        go:
-          [
+        go: [
             "1.13",
-            "1.14",
-            "1.15",
-            "1.16",
-            "1.17",
+            # "1.14",
+            # "1.15",
+            # "1.16",
+            # "1.17",
             "1.18",
             "1.19",
             "1.20",
             "1.21",
           ]
+        os: [linux] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
+        arch: [X64, ARM64]
+        exclude:
+          - os: Linux
+            arch: ARM64
+          - os: Windows
+            arch: ARM64
+    runs-on: ["${{ matrix.os }}", "${{ matrix.arch }}"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Unit Test
+        run: MOCKEY_DEBUG=true go test -gcflags="all=-l -N" -race -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Benchmark
+        run: go test -gcflags="all=-l -N" -bench=. -benchmem -run=none ./...
+
+  unit-benchmark-test-no-race: # some go version -race has fatal issues
+    strategy:
+      matrix:
+        go: ["1.14", "1.15", "1.16", "1.17"]
         os: [linux] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
         arch: [X64, ARM64]
         exclude:
