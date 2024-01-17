@@ -421,11 +421,11 @@ func (mocker *Mocker) mock() {
 }
 
 func (mocker *Mocker) Times() int {
-	return int(mocker.times)
+	return int(atomic.LoadInt64(&mocker.times))
 }
 
 func (mocker *Mocker) MockTimes() int {
-	return int(mocker.mockTimes)
+	return int(atomic.LoadInt64(&mocker.mockTimes))
 }
 
 func (mocker *Mocker) key() uintptr {
