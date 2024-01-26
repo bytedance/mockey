@@ -1,6 +1,3 @@
-//go:build go1.21
-// +build go1.21
-
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -17,19 +14,13 @@
  * limitations under the License.
  */
 
-package common
+package stw
 
-import (
-	_ "unsafe"
-)
-
-func StopTheWorld() {
-	const stwForTestResetDebugLog = 16
-	stopTheWorld(stwForTestResetDebugLog)
+type ctx interface {
+	StopTheWorld()
+	StartTheWorld()
 }
 
-//go:linkname stopTheWorld runtime.stopTheWorld
-func stopTheWorld(reason uint8)
-
-//go:linkname StartTheWorld runtime.startTheWorld
-func StartTheWorld()
+func NewSTWCtx() ctx {
+	return newSTWCtx()
+}

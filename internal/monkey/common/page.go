@@ -18,7 +18,8 @@ package common
 
 import (
 	"syscall"
-	"unsafe"
+
+	"github.com/bytedance/mockey/internal/tool"
 )
 
 var pageSize = uintptr(syscall.Getpagesize())
@@ -32,12 +33,20 @@ func PageSize() int {
 }
 
 func AllocatePage() []byte {
-	var memStats uint64 = 0
-	addr := sysAlloc(pageSize, &memStats)
-	return BytesOf(uintptr(addr), int(pageSize))
+	page, err := allocate(int(pageSize))
+	tool.Assert(err == nil, "allocate page failed: %v", err)
+	return page
 }
 
 func ReleasePage(mem []byte) {
-	memStats := uint64(cap(mem))
-	sysFree(unsafe.Pointer(PtrOf(mem)), uintptr(cap(mem)), &memStats)
+	err := free(mem)
+	tool.Assert(err == nil, "free page failed: %v", err)
+}
+
+func allocate(n int) ([]byte, error) {
+	return syscall.Mmap(-1, 0, int(n), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_ANON|syscall.MAP_PRIVATE)
+}
+
+func free(b []byte) error {
+	return syscall.Munmap(b)
 }

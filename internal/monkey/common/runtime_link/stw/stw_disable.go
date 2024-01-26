@@ -1,5 +1,5 @@
-//go:build !go1.21
-// +build !go1.21
+//go:build go1.23 && !mockey_stw
+// +build go1.23,!mockey_stw
 
 /*
  * Copyright 2022 ByteDance Inc.
@@ -17,18 +17,21 @@
  * limitations under the License.
  */
 
-package common
+package stw
 
 import (
 	_ "unsafe"
 )
 
-func StopTheWorld() {
-	stopTheWorld("mockey")
+func newSTWCtx() ctx {
+	return &stwCtx{}
 }
 
-//go:linkname stopTheWorld runtime.stopTheWorld
-func stopTheWorld(reason string)
+type stwCtx struct {
+}
 
-//go:linkname StartTheWorld runtime.startTheWorld
-func StartTheWorld()
+func (ctx *stwCtx) StopTheWorld() {
+}
+
+func (ctx *stwCtx) StartTheWorld() {
+}

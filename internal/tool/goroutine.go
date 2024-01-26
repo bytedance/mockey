@@ -17,10 +17,25 @@
 package tool
 
 import (
+	"runtime"
+	"strconv"
+	"strings"
 	"unsafe"
 )
 
-const gGoroutineIDOffset = 152 // Go1.10
+// The `goid` field offset in the struct g in the runtime package
+// 152 before, 160 after go1.22 (go1.23 introduced the `syscallbp` field before goid)
+var gGoroutineIDOffset uintptr
+
+func init() {
+	gGoroutineIDOffset = 152 // Go1.22-
+	vcode := strings.Split(strings.TrimPrefix(runtime.Version(), "go"), ".")
+	if len(vcode) >= 2 && vcode[0] == "1" {
+		if subv, err := strconv.ParseInt(vcode[1], 10, 64); err == nil && subv > 22 {
+			gGoroutineIDOffset = 160 // Go1.23+
+		}
+	}
+}
 
 func GetGoroutineID() int64 {
 	g := getG()

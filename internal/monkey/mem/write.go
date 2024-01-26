@@ -18,13 +18,15 @@ package mem
 
 import (
 	"github.com/bytedance/mockey/internal/monkey/common"
+	"github.com/bytedance/mockey/internal/monkey/common/runtime_link/stw"
 	"github.com/bytedance/mockey/internal/tool"
 )
 
 // WriteWithSTW copies data bytes to the target address and replaces the original bytes, during which it will stop the
 // world (only the current goroutine's P is running).
 func WriteWithSTW(target uintptr, data []byte) {
-	common.StopTheWorld()
+	ctx := stw.NewSTWCtx()
+	ctx.StopTheWorld()
 
 	begin := target
 	end := target + uintptr(len(data))
@@ -43,5 +45,5 @@ func WriteWithSTW(target uintptr, data []byte) {
 		break
 	}
 
-	common.StartTheWorld()
+	ctx.StartTheWorld()
 }
