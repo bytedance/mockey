@@ -144,7 +144,6 @@ func unsafeMethodByName(instance interface{}, methodName string) interface{} {
 	typ, tfn, ok := unsafereflect.MethodByName(instance, methodName)
 	if !ok {
 		tool.Assert(false, "can't reflect instance method :%v", methodName)
-		return nil
 	}
 	if typ == nil {
 		tool.Assert(false, "failed to determine %v's type", methodName)
@@ -152,7 +151,6 @@ func unsafeMethodByName(instance interface{}, methodName string) interface{} {
 
 	if typ.Kind() != reflect.Func {
 		tool.Assert(false, "invalid instance method type: %v,%v", methodName, typ.Kind().String())
-		return nil
 	}
 
 	in := []reflect.Type{reflect.TypeOf(instance)}
