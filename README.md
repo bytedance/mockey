@@ -76,10 +76,14 @@ func TestMockXXX(t *testing.T) {
 ### Version Support 
 - Go 1.13+
 
+
 ## License
 Mockey is distributed under the [Apache License](https://github.com/bytedance/mockey/blob/main/LICENSE-APACHE), version 2.0. The licenses of third party dependencies of Mockey are explained [here](https://github.com/bytedance/mockey/blob/main/licenses).
 
 ## FAQ
+
+### Go 1.23 compile error `"link: github.com/bytedance/mockey/internal/monkey/common: invalid reference to runtime.sysAllocOS"`?
+add build flag  `-ldflags=-checklinkname=0`
 
 ### How to disable inline and compile optimization?
 1. Command line：`go test -gcflags="all=-l -N" -v ./...`
