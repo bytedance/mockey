@@ -81,6 +81,9 @@ Mockey 基于[Apache License 2.0](https://github.com/bytedance/mockey/blob/main/
 
 ## FAQ
 
+### Go 1.23 编译错误 `"link: github.com/bytedance/mockey/internal/monkey/common: invalid reference to runtime.sysAllocOS"`?
+增加编译参数  `-ldflags=-checklinkname=0`
+
 ### 如何禁用内联和编译优化？
 1. 命令行：`go test -gcflags="all=-l -N" -v ./...`
 2. Goland：在 **运行/调试配置 > Go工具实参** 对话框中填写 `-gcflags="all=-l -N"` 
