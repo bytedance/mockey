@@ -15,6 +15,7 @@ package mem
 // limitations under the License.
 
 import (
+	"syscall"
 	"testing"
 
 	"github.com/bytedance/mockey/internal/monkey/common"
@@ -58,4 +59,22 @@ func TestWrite(t *testing.T) {
 
 		break
 	}
+}
+
+func Test_write(t *testing.T) {
+	target := make([]byte, 1024)
+	for i := 0; i < len(target); i++ {
+		target[i] = 0x00
+	}
+	data := make([]byte, 512)
+	for i := 0; i < len(data); i++ {
+		data[i] = 0xaa + byte(i)
+	}
+
+	res := write(common.PtrOf(target), common.PtrOf(data), 3, common.PageOf(common.PtrOf(target)), common.PageSize(), syscall.PROT_READ|syscall.PROT_WRITE)
+	tool.Assert(res == 0, "assert fail")
+	tool.Assert(target[0] == 0xaa, "assert fail, target0  %x", target[0])
+	tool.Assert(target[1] == 0xab, "assert fail, target1  %x", target[1])
+	tool.Assert(target[2] == 0xac, "assert fail, target2  %x", target[2])
+	tool.Assert(target[3] == 0x00, "assert fail, target3  %x", target[3])
 }

@@ -1,5 +1,5 @@
-//go:build !go1.19
-// +build !go1.19
+//go:build go1.21 && !go1.22
+// +build go1.21,!go1.22
 
 /*
  * Copyright 2022 ByteDance Inc.
@@ -17,17 +17,31 @@
  * limitations under the License.
  */
 
-package common
+package stw
 
-import "unsafe"
+import (
+	_ "unsafe"
+)
 
-/*
- * This may lead to runtime.ReadMemStats inaccurate
- * See https://github.com/bytedance/mockey/issues/13
- */
+func newSTWCtx() ctx {
+	return &stwCtx{}
+}
 
-//go:linkname sysAlloc runtime.sysAlloc
-func sysAlloc(n uintptr, sysStat *uint64) unsafe.Pointer
+type stwCtx struct {
+}
 
-//go:linkname sysFree runtime.sysFree
-func sysFree(v unsafe.Pointer, n uintptr, sysStat *uint64)
+const stwForTestResetDebugLog = 16
+
+func (ctx *stwCtx) StopTheWorld() {
+	stopTheWorld(stwForTestResetDebugLog)
+}
+
+func (ctx *stwCtx) StartTheWorld() {
+	startTheWorld()
+}
+
+//go:linkname stopTheWorld runtime.stopTheWorld
+func stopTheWorld(reason uint8)
+
+//go:linkname startTheWorld runtime.startTheWorld
+func startTheWorld()
