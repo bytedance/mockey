@@ -1,3 +1,6 @@
+//go:build !windows
+// +build !windows
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -18,27 +21,12 @@ package common
 
 import (
 	"syscall"
-
-	"github.com/bytedance/mockey/internal/tool"
 )
 
-var pageSize = uintptr(syscall.Getpagesize())
-
-func PageOf(ptr uintptr) uintptr {
-	return ptr &^ (pageSize - 1)
+func allocate(n int) ([]byte, error) {
+	return syscall.Mmap(-1, 0, int(n), syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_ANON|syscall.MAP_PRIVATE)
 }
 
-func PageSize() int {
-	return int(pageSize)
-}
-
-func AllocatePage() []byte {
-	page, err := allocate(int(pageSize))
-	tool.Assert(err == nil, "allocate page failed: %v", err)
-	return page
-}
-
-func ReleasePage(mem []byte) {
-	err := free(mem)
-	tool.Assert(err == nil, "free page failed: %v", err)
+func free(b []byte) error {
+	return syscall.Munmap(b)
 }
