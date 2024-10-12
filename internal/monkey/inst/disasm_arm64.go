@@ -40,11 +40,9 @@ func calcFnAddrRange(name string, fn func()) (uintptr, uintptr) {
 		for i := range inst.Args {
 			args = append(args, inst.Args[i])
 		}
-		tool.DebugPrintf("init: <%v>\t%v\t%v\t%v\t%v\t%v\t%v\n", args...)
 
 		if inst.Op == arm64asm.RET {
 			end = start + uintptr(pos)
-			tool.DebugPrintf("init: %v(%v,%v)\n", name, start, end)
 			return start, end
 		}
 
@@ -80,7 +78,7 @@ func GetGenericJumpAddr(addr uintptr, maxScan uint64) uintptr {
 		}
 
 		if inst.Op == arm64asm.BL {
-			fnAddr := calcAddr(uintptr(unsafe.Pointer(&code[0]))+uintptr(pos), inst.Enc)
+			fnAddr := calcAddr(uintptr(unsafe.Pointer(&code[0]))+uintptr(pos), inst)
 			isExtraCall, extraName := isGenericProxyCallExtra(fnAddr)
 			tool.DebugPrintf("found BL, raw is: %x,  fnAddr: %v, isExtraCall: %v, extraName: %v\n", inst.String(), fnAddr, isExtraCall, extraName)
 			if !isExtraCall {
@@ -93,23 +91,11 @@ func GetGenericJumpAddr(addr uintptr, maxScan uint64) uintptr {
 	return allAddrs[0]
 }
 
-func calcAddr(from uintptr, bl uint32) uintptr {
-	tool.DebugPrintf("calc BL addr, from: %x(%v) bl: %x\n", from, from, bl)
-	offset := bl << 8 >> 8
-	flag := (offset << 9 >> 9) == offset // 是否小于0
-
-	var dest uintptr
-	if flag {
-		// L -> H
-		// (dest - cur) / 4 = offset
-		// dest = cur + offset * 4
-		dest = from + uintptr(offset*4)
+func calcAddr(from uintptr, bl arm64asm.Inst) uintptr {
+	distance := int64(bl.Args[0].(arm64asm.PCRel))
+	if distance < 0 {
+		return from - uintptr(-distance)
 	} else {
-		// H -> L
-		// (cur - dest) / 4 = (0x00ffffff - offset + 1)
-		// dest = cur -  (0x00ffffff - offset + 1) * 4
-		dest = from - uintptr((0x00ffffff-offset+1)*4)
+		return from + uintptr(distance)
 	}
-	tool.DebugPrintf("2th complement, L->H:%v offset: %x from: %x(%v) dest: %x(%v), distance: %v\n", flag, offset, from, from, dest, dest, from-dest)
-	return dest
 }

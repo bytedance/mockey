@@ -22,6 +22,8 @@ package inst
 import (
 	"reflect"
 	_ "unsafe"
+
+	"github.com/bytedance/mockey/internal/tool"
 )
 
 //go:linkname racefuncenter runtime.racefuncenter
@@ -67,5 +69,9 @@ func init() {
 		reflect.ValueOf(racereadrangepc1).Pointer():  "racereadrangepc1",
 		reflect.ValueOf(racewriterangepc1).Pointer(): "racewriterangepc1",
 		reflect.ValueOf(racecallbackthunk).Pointer(): "racecallbackthunk",
+	}
+
+	for addr, name := range proxyCallRace {
+		tool.DebugPrintf("race func: %x(%v)\n", addr, name)
 	}
 }

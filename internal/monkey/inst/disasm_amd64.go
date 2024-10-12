@@ -41,11 +41,9 @@ func calcFnAddrRange(name string, fn func()) (uintptr, uintptr) {
 		for i := range inst.Args {
 			args = append(args, inst.Args[i])
 		}
-		tool.DebugPrintf("init: <%v>\t%v\t%v\t%v\t%v\t%v\t%v\n", args...)
 
 		if inst.Op == x86asm.RET {
 			end = start + uintptr(pos)
-			tool.DebugPrintf("init: %v(%v,%v)\n", name, start, end)
 			return start, end
 		}
 

@@ -27,8 +27,7 @@ func newSTWCtx() ctx {
 	return &stwCtx{}
 }
 
-type stwCtx struct {
-}
+type stwCtx struct{}
 
 const stwForTestResetDebugLog = 16
 
