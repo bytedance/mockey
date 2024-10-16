@@ -255,9 +255,6 @@ PS: It's also possible to specify the goroutine where the mocking takes effect u
 
 ## FAQ/troubleshooting
 
-### Go 1.23 compile error `"link: github.com/bytedance/mockey/internal/monkey/common: invalid reference to runtime.sysAllocOS"`?
-add build flag  `-ldflags=-checklinkname=0`
-
 ### How to disable inline and compile optimization?
 1. Command line：`go test -gcflags="all=-l -N" -v ./...`
 2. Goland：fill `-gcflags="all=-l -N"` in the **Run/Debug Configurations > Go tool arguments** dialog box

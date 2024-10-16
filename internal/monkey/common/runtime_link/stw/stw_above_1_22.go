@@ -36,6 +36,7 @@ const stwForTestResetDebugLog = 16
 func (ctx *stwCtx) StopTheWorld() {
 	ctx.w = stopTheWorld(stwForTestResetDebugLog)
 }
+
 func (ctx *stwCtx) StartTheWorld() {
 	startTheWorld(ctx.w)
 }
