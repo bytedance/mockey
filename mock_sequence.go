@@ -16,7 +16,11 @@
 
 package mockey
 
-import "github.com/bytedance/mockey/internal/tool"
+import (
+	"sync"
+
+	"github.com/bytedance/mockey/internal/tool"
+)
 
 type SequenceOpt interface {
 	// Private make sure it is mockey private interface
@@ -36,6 +40,7 @@ type sequence struct {
 	values        []*sequenceValue
 	curV          int // current value
 	curT          int // current value times
+	readLock      sync.Mutex
 }
 
 type sequenceValue struct {
@@ -44,6 +49,7 @@ type sequenceValue struct {
 }
 
 func (s *sequence) GetNext() []interface{} {
+	s.readLock.Lock()
 	seqV := s.values[s.curV]
 	s.curT++
 	if s.curT >= seqV.t {
@@ -53,6 +59,7 @@ func (s *sequence) GetNext() []interface{} {
 			s.curV = 0
 		}
 	}
+	s.readLock.Unlock()
 	return seqV.v
 }
 
