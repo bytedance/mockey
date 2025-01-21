@@ -18,10 +18,33 @@ package mockey
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/smartystreets/goconvey/convey"
 )
+
+func TestSequenceRace(t *testing.T) {
+	PatchConvey("test sequence race", t, func(c convey.C) {
+		fn := func() int { return -1 }
+		mocker := Mock(fn).Return(Sequence(0).Then(1)).Build()
+
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			v := fn()
+			c.So(v, convey.ShouldNotEqual, -1)
+		}()
+		go func() {
+			defer wg.Done()
+			v := fn()
+			c.So(v, convey.ShouldNotEqual, -1)
+		}()
+		wg.Wait()
+		c.So(mocker.MockTimes(), convey.ShouldEqual, 2)
+	})
+}
 
 func TestSequenceOpt(t *testing.T) {
 	PatchConvey("test sequenceOpt", t, func() {
