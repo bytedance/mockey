@@ -106,7 +106,7 @@ func (m *mockCondition) SetToForce(to interface{}) {
 
 // checkGenericAndReceiver check if typ has GenericsInfo and selfReceiver as argument
 //
-// The hook function will looks like func(_ GenericInfo, self *struct, arg0 int ...)
+// The hook function will look like func(_ GenericInfo, self *struct, arg0 int ...)
 // When we use 'When' or 'To', our input hook function will looks like:
 //  1. func(arg0 int ...)
 //  2. func(info GenericInfo, arg0 int ...)
