@@ -62,30 +62,29 @@ func removeFromGlobal(mocker mockerInstance) {
 	delete(gMocker[len(gMocker)-1], mocker.key())
 }
 
-// Unpatch all mocks in current 'PatchConvey' context
+// UnPatchAll unpatch all mocks in current 'PatchConvey' context
 //
 // If the caller is out of 'PatchConvey', it will unpatch all mocks
 //
 // For example:
 //
-//		Test1(t) {
-//			Mock(a).Build()
-//		 	Mock(b).Build()
+//	Test1(t) {
+//	    Mock(a).Build()
+//		Mock(b).Build()
 //
-//			// a and b will be unpatched
-//			UnpatchAll()
-//		}
-//		})
+//	    // a and b will be unpatched
+//		UnpatchAll()
+//	}
 //
-//		Test2(t) {
+//	Test2(t) {
 //		Mock(a).Build()
 //		PatchConvey(t,func(){
-//		 	Mock(b).Build()
+//		    Mock(b).Build()
 //
 //			// only b will be unpatched
 //			UnpatchAll()
 //		}
-//	})
+//	}
 func UnPatchAll() {
 	for _, mocker := range gMocker[len(gMocker)-1] {
 		mocker.unPatch()
