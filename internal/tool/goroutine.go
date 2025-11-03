@@ -24,16 +24,25 @@ import (
 )
 
 // The `goid` field offset in the struct g in the runtime package
-// 152 before, 160 after go1.22 (go1.23 introduced the `syscallbp` field before goid)
 var gGoroutineIDOffset uintptr
 
 func init() {
-	gGoroutineIDOffset = 152 // Go1.22-
+	gGoroutineIDOffset = 152 // default offset for Go1.22-
+
 	vcode := strings.Split(strings.TrimPrefix(runtime.Version(), "go"), ".")
-	if len(vcode) >= 2 && vcode[0] == "1" {
-		if subv, err := strconv.ParseInt(vcode[1], 10, 64); err == nil && subv > 22 {
-			gGoroutineIDOffset = 160 // Go1.23+
-		}
+	if vcode[0] != "1" || len(vcode) < 2 {
+		DebugPrintf("invalid go version: %s", runtime.Version())
+		return
+	}
+	subv, err := strconv.ParseInt(vcode[1], 10, 64)
+	if err != nil {
+		DebugPrintf("invalid go version: %s", runtime.Version())
+		return
+	}
+	if subv >= 23 && subv < 25 { // Go1.23+
+		gGoroutineIDOffset = 160 // Go1.23 introduced the `syscallbp` field before goid
+	} else if subv >= 25 { // Go1.25+
+		gGoroutineIDOffset = 152 // Go1.25 removed the `gobuf.ret` field before goid
 	}
 }
 
