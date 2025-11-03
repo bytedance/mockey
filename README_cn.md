@@ -2,6 +2,13 @@
 
 [English](README.md) | 中文
 
+[![Release](https://img.shields.io/github/v/release/bytedance/mockey)](https://github.com/bytedance/mockey/releases)
+[![License](https://img.shields.io/github/license/bytedance/mockey)](https://github.com/bytedance/mockey/blob/main/LICENSE-APACHE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bytedance/mockey)](https://goreportcard.com/report/github.com/bytedance/mockey)
+[![codecov](https://codecov.io/github/bytedance/mockey/graph/badge.svg?token=JKL3WSE3I3)](https://codecov.io/github/bytedance/mockey)
+[![OpenIssue](https://img.shields.io/github/issues/bytedance/mockey)](https://github.com/bytedance/mockey/issues)
+[![ClosedIssue](https://img.shields.io/github/issues-closed/bytedance/mockey)](https://github.com/bytedance/mockey/issues?q=is%3Aissue+is%3Aclosed)
+
 Mockey 是一个简单易用的 Golang 打桩库，可以快速方便地进行函数和变量的 mock。目前， mockey 已广泛应用于字节跳动服务的单元测试编写中（7k+ 仓库）并积极维护。它的底层原理是在运行时重写函数指令，这一点和 [gomonkey](https://github.com/agiledragon/gomonkey) 类似。
 
 Mockey 使得 mock 函数、方法和变量变得容易，不需要将所有依赖指定为接口类型。

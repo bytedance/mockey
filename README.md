@@ -1,6 +1,13 @@
 # Mockey
 English | [中文](README_cn.md)
 
+[![Release](https://img.shields.io/github/v/release/bytedance/mockey)](https://github.com/bytedance/mockey/releases)
+[![License](https://img.shields.io/github/license/bytedance/mockey)](https://github.com/bytedance/mockey/blob/main/LICENSE-APACHE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bytedance/mockey)](https://goreportcard.com/report/github.com/bytedance/mockey)
+[![codecov](https://codecov.io/github/bytedance/mockey/graph/badge.svg?token=JKL3WSE3I3)](https://codecov.io/github/bytedance/mockey)
+[![OpenIssue](https://img.shields.io/github/issues/bytedance/mockey)](https://github.com/bytedance/mockey/issues)
+[![ClosedIssue](https://img.shields.io/github/issues-closed/bytedance/mockey)](https://github.com/bytedance/mockey/issues?q=is%3Aissue+is%3Aclosed)
+
 Mockey is a simple and easy-to-use golang mock library, which can quickly and conveniently mock functions and variables. At present, it is widely used in the unit test writing of ByteDance services (7k+ repos) and is actively maintained. In essence it rewrites function instructions at runtime similarly to [gomonkey](https://github.com/agiledragon/gomonkey).
 
 Mockey makes it easy to replace functions, methods and variables with mocks reducing the need to specify all dependencies as interfaces.
