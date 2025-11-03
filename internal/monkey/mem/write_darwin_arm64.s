@@ -24,6 +24,9 @@
 
 #define protRW $(0x1|0x2|0x10)
 #define mProtect $(0x2000000+74)
+#define DSB_SY  WORD $0xd5033f9f
+#define IC_IVAU WORD $0xd50b7520
+#define ISB_SY  WORD $0xd5033fdf
 
 TEXT ·write(SB),NOSPLIT,$24
     B START
@@ -52,6 +55,16 @@ PROTECT_OK:
     MOVD    R1, from-16(SP)
     MOVD    R2, n-8(SP)
     CALL    runtime·memmove(SB)
+    DSB_SY
+    MOVD    page+24(FP), R0
+    MOVD    pageSize+32(FP), R1
+FLUSH_LOOP:
+    IC_IVAU
+    ADD     $64, R0, R0
+    SUBS    $64, R1, R1
+    BGT     FLUSH_LOOP
+    DSB_SY
+    ISB_SY
     MOVD    mProtect, R16
     MOVD    page+24(FP), R0
     MOVD    pageSize+32(FP), R1
