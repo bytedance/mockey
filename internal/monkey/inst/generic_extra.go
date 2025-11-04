@@ -36,7 +36,7 @@ func init() {
 // proxyCallRace exclude functions used for race check in unit test
 //
 // If we use '-race' in test command, golang may use 'racefuncenter' and 'racefuncexit' in generic
-// functions's proxy, which is toxic for us to find the original generic function implementation.
+// function's proxy, which is toxic for us to find the original generic function implementation.
 //
 // So we need to exclude them. We simply exclude most of race functions defined in runtime.
 var proxyCallRace = map[uintptr]string{}

@@ -28,7 +28,7 @@ func (c CallerInfo) String() string {
 	return fmt.Sprintf("%s:%d", c.File, c.Line)
 }
 
-// Caller gets non-current package caller of a function
+// OuterCaller gets non-current package caller of a function
 // For example, assume we have 3 files: a/b/foo.go, a/c/bar.go and a/c/innerBar.go,
 // a/b/foo.Foo calls a/c/bar.Bar, and  a/c/bar.Bar calls a/c/innerBar.innerBar.
 // Here is how innerBar looks like:
@@ -39,7 +39,7 @@ func (c CallerInfo) String() string {
 func OuterCaller() (info CallerInfo) {
 	defer func() {
 		if err := recover(); err != nil {
-			DebugPrintf("OuterCaller: get stack failed, err: %v", err)
+			DebugPrintf("OuterCaller: get stack failed, err: %v\n", err)
 			info = CallerInfo(runtime.Frame{File: "Nan"})
 		}
 	}()

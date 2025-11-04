@@ -31,12 +31,12 @@ func init() {
 
 	vcode := strings.Split(strings.TrimPrefix(runtime.Version(), "go"), ".")
 	if vcode[0] != "1" || len(vcode) < 2 {
-		DebugPrintf("invalid go version: %s", runtime.Version())
+		DebugPrintf("invalid go version: %s\n", runtime.Version())
 		return
 	}
 	subv, err := strconv.ParseInt(vcode[1], 10, 64)
 	if err != nil {
-		DebugPrintf("invalid go version: %s", runtime.Version())
+		DebugPrintf("invalid go version: %s\n", runtime.Version())
 		return
 	}
 	if subv >= 23 && subv < 25 { // Go1.23+

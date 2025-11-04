@@ -31,12 +31,12 @@ func TestGetNestedMethod(t *testing.T) {
 	convey.Convey("TestGetNestedMethod", t, func() {
 		convey.Convey("basic cases", func() {
 			convey.Convey("case nil", func() {
-				convey.So(func() { GetNestedMethod(nil, "unknown") }, convey.ShouldPanicWith, "can't reflect instance method :unknown")
+				convey.So(func() { GetNestedMethod(nil, "unknown") }, convey.ShouldPanicWith, "can't reflect instance method: unknown")
 			})
 
 			convey.Convey("case testA", func() {
 				instance := testA{}
-				convey.So(func() { GetNestedMethod(instance, "FooB") }, convey.ShouldPanicWith, "can't reflect instance method :FooB")
+				convey.So(func() { GetNestedMethod(instance, "FooB") }, convey.ShouldPanicWith, "can't reflect instance method: FooB")
 				convey.So(func() { GetNestedMethod(instance, "FooA") }, convey.ShouldNotPanic)
 				convey.So(func() { GetNestedMethod(instance, "BarA") }, convey.ShouldNotPanic)
 				convey.So(func() { GetNestedMethod(instance, "FooC") }, convey.ShouldNotPanic)
@@ -53,7 +53,7 @@ func TestGetNestedMethod(t *testing.T) {
 
 			convey.Convey("case testB", func() {
 				instance := testB{}
-				convey.So(func() { GetNestedMethod(instance, "FooA") }, convey.ShouldPanicWith, "can't reflect instance method :FooA")
+				convey.So(func() { GetNestedMethod(instance, "FooA") }, convey.ShouldPanicWith, "can't reflect instance method: FooA")
 				convey.So(func() { GetNestedMethod(instance, "FooB") }, convey.ShouldNotPanic)
 				convey.So(func() { GetNestedMethod(instance, "BarB") }, convey.ShouldNotPanic)
 				convey.So(func() { GetNestedMethod(instance, "FooC") }, convey.ShouldNotPanic)
@@ -62,7 +62,7 @@ func TestGetNestedMethod(t *testing.T) {
 
 			convey.Convey("case testD", func() {
 				instance := testD{}
-				convey.So(func() { GetNestedMethod(instance, "FooA") }, convey.ShouldPanicWith, "can't reflect instance method :FooA")
+				convey.So(func() { GetNestedMethod(instance, "FooA") }, convey.ShouldPanicWith, "can't reflect instance method: FooA")
 				convey.So(func() { GetNestedMethod(instance, "FooD") }, convey.ShouldNotPanic)
 				convey.So(func() { GetNestedMethod(instance, "BarD") }, convey.ShouldNotPanic)
 				convey.So(func() { GetNestedMethod(instance, "FooB") }, convey.ShouldNotPanic)
@@ -160,12 +160,12 @@ func TestGetMethod(t *testing.T) {
 	convey.Convey("TestGetMethod", t, func() {
 		convey.Convey("basic cases", func() {
 			convey.Convey("case nil", func() {
-				convey.So(func() { GetMethod(nil, "unknown") }, convey.ShouldPanicWith, "can't reflect instance method :unknown")
+				convey.So(func() { GetMethod(nil, "unknown") }, convey.ShouldPanicWith, "can't reflect instance method: unknown")
 			})
 
 			convey.Convey("case testA", func() {
 				instance := testA{}
-				convey.So(func() { GetMethod(instance, "FooB") }, convey.ShouldPanicWith, "can't reflect instance method :FooB")
+				convey.So(func() { GetMethod(instance, "FooB") }, convey.ShouldPanicWith, "can't reflect instance method: FooB")
 				convey.So(func() { GetMethod(instance, "FooA") }, convey.ShouldNotPanic)
 				convey.So(func() { GetMethod(instance, "BarA") }, convey.ShouldNotPanic)
 				convey.So(func() { GetMethod(instance, "FooC") }, convey.ShouldNotPanic)
@@ -182,7 +182,7 @@ func TestGetMethod(t *testing.T) {
 
 			convey.Convey("case testB", func() {
 				instance := testB{}
-				convey.So(func() { GetMethod(instance, "FooA") }, convey.ShouldPanicWith, "can't reflect instance method :FooA")
+				convey.So(func() { GetMethod(instance, "FooA") }, convey.ShouldPanicWith, "can't reflect instance method: FooA")
 				convey.So(func() { GetMethod(instance, "FooB") }, convey.ShouldNotPanic)
 				convey.So(func() { GetMethod(instance, "BarB") }, convey.ShouldNotPanic)
 				convey.So(func() { GetMethod(instance, "FooC") }, convey.ShouldNotPanic)
@@ -191,7 +191,7 @@ func TestGetMethod(t *testing.T) {
 
 			convey.Convey("case testD", func() {
 				instance := testD{}
-				convey.So(func() { GetMethod(instance, "FooA") }, convey.ShouldPanicWith, "can't reflect instance method :FooA")
+				convey.So(func() { GetMethod(instance, "FooA") }, convey.ShouldPanicWith, "can't reflect instance method: FooA")
 				convey.So(func() { GetMethod(instance, "FooD") }, convey.ShouldNotPanic)
 				convey.So(func() { GetMethod(instance, "BarD") }, convey.ShouldNotPanic)
 				convey.So(func() { GetMethod(instance, "FooB") }, convey.ShouldNotPanic)
@@ -204,7 +204,7 @@ func TestGetMethod(t *testing.T) {
 				var instance interface{} = NewTestFuncField()
 				convey.So(func() { GetMethod(instance, "Public") }, convey.ShouldNotPanic)
 				convey.So(func() { GetMethod(instance, "private") }, convey.ShouldNotPanic)
-				convey.So(func() { GetMethod(instance, "notExist") }, convey.ShouldPanicWith, "can't reflect instance method :notExist")
+				convey.So(func() { GetMethod(instance, "notExist") }, convey.ShouldPanicWith, "can't reflect instance method: notExist")
 				convey.So(func() {
 					reflect.ValueOf(GetMethod(instance, "Public")).Call([]reflect.Value{})
 				}, convey.ShouldPanicWith, "shouldn't here")

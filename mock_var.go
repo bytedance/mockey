@@ -63,7 +63,7 @@ func (mocker *MockerVar) To(value interface{}) *MockerVar {
 		v = reflect.TypeOf(value)
 	}
 
-	tool.Assert(v.AssignableTo(mocker.targetType), "value type:%s not match target type:%s", v.Name(), mocker.targetType.Name())
+	tool.Assert(v.AssignableTo(mocker.targetType), "value type: %s not match target type: %s", v.Name(), mocker.targetType.Name())
 	mocker.Patch()
 	return mocker
 }

@@ -80,7 +80,7 @@ func GetGenericJumpAddr(addr uintptr, maxScan uint64) uintptr {
 		if inst.Op == arm64asm.BL {
 			fnAddr := calcAddr(uintptr(unsafe.Pointer(&code[0]))+uintptr(pos), inst)
 			isExtraCall, extraName := isGenericProxyCallExtra(fnAddr)
-			tool.DebugPrintf("found BL, raw is: %x,  fnAddr: %v, isExtraCall: %v, extraName: %v\n", inst.String(), fnAddr, isExtraCall, extraName)
+			tool.DebugPrintf("found BL, raw is: %x, fnAddr: %v, isExtraCall: %v, extraName: %v\n", inst.String(), fnAddr, isExtraCall, extraName)
 			if !isExtraCall {
 				allAddrs = append(allAddrs, fnAddr)
 			}

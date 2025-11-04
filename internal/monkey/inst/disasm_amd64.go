@@ -114,6 +114,6 @@ func calcAddr(from uintptr, rel int32) uintptr {
 		dest = from + uintptr(rel)
 	}
 
-	tool.DebugPrintf("L->H:%v rel: %v from: %x(%v) dest: %x(%v), distance: %v\n", rel > 0, rel, from, from, dest, dest, from-dest)
+	tool.DebugPrintf("L->H: %v, rel: %v, from: %x(%v), dest: %x(%v), distance: %v\n", rel > 0, rel, from, from, dest, dest, from-dest)
 	return dest
 }

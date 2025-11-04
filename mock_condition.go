@@ -117,7 +117,7 @@ func (m *mockCondition) SetToForce(to interface{}) {
 func (m *mockCondition) checkGenericAndReceiver(typ reflect.Type) (bool, bool) {
 	targetType := reflect.TypeOf(m.builder.target)
 	tool.Assert(typ.Kind() == reflect.Func, "Param(%v) a is not a func", typ.Kind())
-	tool.Assert(targetType.IsVariadic() == typ.IsVariadic(), "target:%v, hook:%v args not match", targetType, typ)
+	tool.Assert(targetType.IsVariadic() == typ.IsVariadic(), "target: %v, hook: %v args not match", targetType, typ)
 
 	shiftTyp := 0
 	if typ.NumIn() > 0 && typ.In(0) == genericInfoType {
@@ -132,7 +132,7 @@ func (m *mockCondition) checkGenericAndReceiver(typ reflect.Type) (bool, bool) {
 	if tool.CheckFuncArgs(targetType, typ, 1, shiftTyp) {
 		return shiftTyp == 1, false
 	}
-	tool.Assert(false, "target:%v, hook:%v args not match", targetType, typ)
+	tool.Assert(false, "target: %v, hook: %v args not match", targetType, typ)
 	return false, false
 }
 
