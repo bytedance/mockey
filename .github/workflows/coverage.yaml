@@ -15,7 +15,7 @@ jobs:
         with:
           go-version: "1.25"
       - name: Unit Test
-        run: go test -gcflags="all=-l -N" -coverprofile=coverage.txt ./...
+        run: MOCKEY_DEBUG=true go test -gcflags="all=-l -N" -coverprofile=coverage.txt -v ./...
       - name: Upload results to Codecov
         uses: codecov/codecov-action@v5
         with:

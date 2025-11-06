@@ -83,7 +83,7 @@ func GetGenericJumpAddr(addr uintptr, maxScan uint64) uintptr {
 		for i := range inst.Args {
 			args = append(args, inst.Args[i])
 		}
-		tool.DebugPrintf("%v\t%v\t%v\t%v\t%v\t%v\n", args...)
+		tool.DebugPrintf("%v\t%v\t%v\t%v\t%v\n", args...)
 
 		if inst.Op == x86asm.RET {
 			break
