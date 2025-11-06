@@ -66,6 +66,7 @@ func TestWin(t *testing.T) {
 		So(res2, ShouldBeFalse) // assert
 	})
 }
+```
 
 ## Features
 - Mock functions and methods
