@@ -12,7 +12,7 @@ Mockey is a simple and easy-to-use golang mock library, which can quickly and co
 
 Mockey makes it easy to replace functions, methods and variables with mocks reducing the need to specify all dependencies as interfaces.
 > 1. Mockey requires **inlining and compilation optimization to be disabled** during compilation, or it won't work. See the [FAQs](#how-to-disable-inline-and-compile-optimization) for details.
-> 2. It is strongly recommended to use it together with the [Convey](https://github.com/smartystreets/goconvey) library (module dependency) in unit tests.
+> 2. It is strongly recommended to use it together with the [goconvey](https://github.com/smartystreets/goconvey) library in unit tests.
 
 ## Install
 ```
@@ -20,6 +20,7 @@ go get github.com/bytedance/mockey@latest
 ```
 
 ## Quick Guide
+### Simplest example
 ```go
 package main
 
@@ -33,9 +34,38 @@ import (
 func main() {
 	Mock(rand.Int).Return(1).Build() // mock `rand.Int` to return 1
 	
-	fmt.Printf("rand.Int() always return: %v\n", rand.Int())
+	fmt.Printf("rand.Int() always return: %v\n", rand.Int()) // Try if it's still random?
 }
 ```
+
+### Unit test example
+```go
+package main_test
+
+import (
+	"math/rand"
+	"testing"
+
+	. "github.com/bytedance/mockey"
+	. "github.com/smartystreets/goconvey/convey"
+)
+
+// Win function to be tested, input a number, win if it's greater than random number, otherwise lose
+func Win(in int) bool {
+	return in > rand.Int()
+}
+
+func TestWin(t *testing.T) {
+	PatchConvey("TestWin", t, func() {
+		Mock(rand.Int).Return(100).Build() // mock
+		
+		res1 := Win(101)                   // execute
+		So(res1, ShouldBeTrue)             // assert
+		
+		res2 := Win(99)         // execute
+		So(res2, ShouldBeFalse) // assert
+	})
+}
 
 ## Features
 - Mock functions and methods
@@ -69,7 +99,7 @@ func main() {
 
 ## Basic Features
 ### Simple function/method
-Use `Mock` to mock function/method, and use `Return` to specify the return value:
+Use `Mock` to mock function/method, use `Return` to specify the return value, and use `Build` to make the mock effective:
 ```go
 package main
 
@@ -104,7 +134,7 @@ func main() {
 	Mock((*B).Foo).Return("MOCKED!").Build()
 	fmt.Println(new(B).Foo("anything")) // MOCKED!
     
-    // Tips: if the target has no return value, you still need to call the empty `Return()`.
+    // Tips: if the target has no return value, you still need to call the empty `Return()` or use `To` to customize the hook function.
 }
 ```
 
@@ -139,6 +169,29 @@ func main() {
 	// mock generic method 
 	MockGeneric((*GenericClass[string]).Foo).Return("MOCKED!").Build()
 	fmt.Println(new(GenericClass[string]).Foo("anything")) // MOCKED!
+}
+```
+
+**Note**: Golang generics share implementation for different types with the same underlying type. For example, in `type MyString string`, `MyString` and `string` share one implementation. Therefore, mocking one type will interfere with the other:
+```go
+package main
+
+import (
+	"fmt"
+
+	. "github.com/bytedance/mockey"
+)
+
+type MyString string
+
+func FooGeneric[T any](t T) T {
+	return t
+}
+
+func main() {
+	MockGeneric(FooGeneric[string]).Return("MOCKED!").Build()
+	fmt.Println(FooGeneric("anything"))           // MOCKED!
+	fmt.Println(FooGeneric[MyString]("anything")) // MOCKED! | This is due to interference after mocking the string type
 }
 ```
 
@@ -197,14 +250,14 @@ func main() {
 	Mock(Foo).To(func(in string) string { return "MOCKED!" }).Build()
 	fmt.Println(Foo("anything")) // MOCKED!
 
-	// NOTE: for method mocking, the receiver can be added to the signature of the hook function on your need.
+	// NOTE: for method mocking, the receiver can be added to the signature of the hook function on your need (if the receiver is not used, it can be omitted, and mockey is compatible).
 	Mock(A.Foo).To(func(a A, in string) string { return a.prefix + ":inner:" + "MOCKED!" }).Build()
 	fmt.Println(A{prefix: "prefix"}.Foo("anything")) // prefix:inner:MOCKED!
 }
 ```
 
 ### Supporting `PatchConvey`
-Use `PatchConvey` to organize test cases, just like `Convey` in `smartystreets/goconvey`. `PatchConvey` will automatically release the mocks after each test case:
+It is recommended to use `PatchConvey` to organize test cases, just like `Goconvey` in `smartystreets/goconvey`. `PatchConvey` will automatically release the mocks after each test case, eliminating the need for `defer`, i.e., the mock scope is only within `PatchConvey`:
 ```go
 package main_test
 
@@ -220,9 +273,9 @@ func Foo(in string) string {
 }
 
 func TestXXX(t *testing.T) {
-    // mock 
+    // mock
 	PatchConvey("mock 1", t, func() {
-		Mock(Foo).Return("MOCKED-1!").Build() // mock 
+		Mock(Foo).Return("MOCKED-1!").Build() // mock
 		res := Foo("anything")                // invoke
 		So(res, ShouldEqual, "MOCKED-1!")     // assert
 	})
@@ -235,17 +288,19 @@ func TestXXX(t *testing.T) {
 
 	// mock again
 	PatchConvey("mock 2", t, func() {
-		Mock(Foo).Return("MOCKED-2!").Build() // mock 
+		Mock(Foo).Return("MOCKED-2!").Build() // mock
 		res := Foo("anything")                // invoke
 		So(res, ShouldEqual, "MOCKED-2!")     // assert
 	})
+    
+    // Tips: Like `Convey`, `PatchConvey` can be nested; each layer of `PatchConvey` will only release its own internal mocks
 }
 ```
 
 ### Providing `GetMethod` to handle special cases
-Use `GetMethod` to get the specific method in special cases.
+In special cases where direct mocking is not possible or not effective, you can use `GetMethod` to get the corresponding method before mocking. Please ensure that the passed object is not nil.
 
-Mock method through an instance:
+Mock method through an instance (including interface type instances):
 ```go
 package main
 
@@ -263,6 +318,9 @@ func main() {
 	a := new(A)
 
 	// Mock(a.Foo) won't work, because `a` is an instance of `A`, not the type `A`
+	// Tips: if the instance is an interface type, you can use it the same way
+	// var ia interface{ Foo(string) string } = new(A)
+	// Mock(GetMethod(ia, "Foo")).Return("MOCKED!").Build()
 	Mock(GetMethod(a, "Foo")).Return("MOCKED!").Build()
 	fmt.Println(a.Foo("anything")) // MOCKED!
 }
@@ -284,6 +342,8 @@ func main() {
 	Mock(GetMethod(sha256.New(), "Sum")).Return([]byte{0}).Build()
 
 	fmt.Println(sha256.New().Sum([]byte("anything"))) // [0]
+	
+	// Tips: this is a special case of "mocking methods through instances", where the type corresponding to the instance is unexported
 }
 ```
 
@@ -333,8 +393,6 @@ func main() {
 	Mock(GetMethod(Wrapper{}, "Foo")).Return("MOCKED!").Build() // or Mock(inner.Foo).Return("MOCKED!").Build()
 
 	fmt.Println(Wrapper{}.Foo("anything")) // MOCKED! 
-    
-	// Tips: `redis.Client` can be mocked in the same way as above
 }
 ```
 
@@ -432,7 +490,10 @@ func main() {
 ```
 
 ### Goroutine filtering
-Use `ExcludeCurrentGoRoutine` / `IncludeCurrentGoRoutine` / `FilterGoRoutine` to determine in which goroutine the mock takes effect:
+By default, mocks take effect in all goroutines. You can use the following APIs to specify in which goroutines the mock takes effect:
+- `IncludeCurrentGoRoutine`: Only takes effect in the current goroutine
+- `ExcludeCurrentGoRoutine`: Takes effect in all goroutines except the current one
+- `FilterGoRoutine`: Include or exclude specified goroutines (by goroutine id)
 ```go
 package main
 
@@ -457,6 +518,8 @@ func main() {
 	}()
 
 	time.Sleep(time.Second) // wait for goroutine to finish
+	
+	// Tips: You can use `GetGoroutineId` to get the current goroutine ID
 }
 ```
 
@@ -484,17 +547,21 @@ func main() {
 	fmt.Println(mocker.MockTimes()) // 1
 	fmt.Println(mocker.Times())     // 2
 
+	// Tips: When remocking or releasing mock, the related counters will be reset to 0.
+
 	// remock `Foo` to return "MOCKED2!"
 	mocker.Return("MOCKED2!")
 	fmt.Println(Foo("anything")) // MOCKED2!
+	fmt.Println(mocker.MockTimes()) // 1 | Reset to 0 when remocking
 
 	// release `Foo` mock
 	mocker.Release()
 	fmt.Println(Foo("anything")) // anything | mock won't work, because mock released
+	fmt.Println(mocker.MockTimes()) // 0 | Reset to 0 when releasing
 }
 ```
 
-## FAQ/troubleshooting
+## FAQ
 ### How to disable inline and compile optimization?
 1. Command line：`go test -gcflags="all=-l -N" -v ./...` in tests or `go build -gcflags="all=-l -N"` in main packages.
 2. Goland：use Debug or fill `-gcflags="all=-l -N"` in the **Run/Debug Configurations > Go tool arguments** dialog box.
@@ -557,14 +624,108 @@ func main() {
     	time.Sleep(time.Second)
     }
     ```
+5. The function call happens before mock execution. Try setting a breakpoint at the first line of the original function. If the execution reaches the first line when the stack is not after the mock code in the unit test, this is the issue. Common in `init()` functions. See [relevant section](#how-to-mock-functions-in-dependency-package-init) for how to mock functions in `init()`.
+6. Using non-generic mock for generic functions. See [Generic function/method](#generic-functionmethod) section for details.
 
+### What is the execution order of nested PatchConvey?
+Completely consistent with Convey, please refer to the goconvey related [documentation](https://github.com/smartystreets/goconvey/wiki/Execution-order).
+
+### How to mock interface types?
+Method 1: Use `GetMethod` to get the corresponding method from the instance
+```go
+package main
+
+import (
+   "fmt"
+
+   . "github.com/bytedance/mockey"
+)
+
+type FooI interface {
+   Foo(string) string
+}
+
+func NewFoo() FooI {
+   return &foo{}
+}
+
+// foo the original implementation of 'FooI'
+type foo struct{}
+
+func (f *foo) Foo(in string) string {
+   return in
+}
+
+func main() {
+   // get the original implementation and mock it
+   instance := NewFoo()
+   Mock(GetMethod(instance, "Foo")).Return("MOCKED!").Build()
+
+   fmt.Println(instance.Foo("anything")) // MOCKED!
+}
+```
+
+Method 2: Create a dummy implementation type and mock the corresponding constructor to return that type
+```go
+package main
+
+import (
+   "fmt"
+
+   . "github.com/bytedance/mockey"
+)
+
+type FooI interface {
+   Foo(string) string
+}
+
+func NewFoo() FooI {
+   return &foo{}
+}
+
+// foo the original implementation of 'FooI'
+type foo struct{}
+
+func (f *foo) Foo(in string) string {
+   return in
+}
+
+func main() {
+   // generate a dummy implementation of 'FooI' and mock it
+   type foo struct{ FooI }
+   Mock((*foo).Foo).Return("MOCKED!").Build()
+   // mock the constructor of 'FooI' to return the dummy implementation
+   Mock(NewFoo).Return(new(foo)).Build()
+
+   fmt.Println(NewFoo().Foo("anything")) // MOCKED!
+}
+```
+
+### How to mock functions in dependency package init()?
+We often encounter this problem: there is an init function in the dependency package that panics when executed in local or CI environment, causing unit tests to fail directly. We hope to mock the panicking function, but since init functions execute before unit tests, general methods cannot succeed.
+
+Suppose package a references package b, and package b's init runs a function FunC from package c. We hope to mock FunC before package a's unit test starts. Since golang's init order is dictionary order, we just need to initialize a package d with mock functions before package c's init. Here's a solution:
+
+1. Create a new package d, then create an init function in this package to mock FunC; Special attention: you need to check for CI environment (such as `os.Getenv("ENV") == "CI"`), otherwise the production environment will also be mocked
+2. In package a's "first go file in dictionary order", "additionally reference" package d, and make package d's reference at the front of all imports
+3. Inject `ENV == "CI"` when running unit tests to make the mock effective
+
+## Troubleshooting
 ### Error "function is too short to patch"？
 1. Inline or compilation optimizations are not disabled. Please check if this log has been printed and refer to [relevant section](#how-to-disable-inline-and-compile-optimization) of FAQ.
     ```
     Mockey check failed, please add -gcflags="all=-N -l".
     ```
 2. The function is really too short resulting in the compiled machine code is not long enough. Generally, two or more lines will not cause this problem. If there is such a need, you may use `MockUnsafe` to mock it causing unknown issues.
-3. The function has been mocked by other tools (such as [monkey](https://github.com/bouk/monkey) etc.)
+3. The function has been mocked by other tools (such as [monkey](https://github.com/bouk/monkey) or [gomonkey](https://github.com/agiledragon/gomonkey) etc.)
+
+### Error "invalid memory address or nil pointer dereference"？
+This is most likely an issue with your business code or test code. It is recommended to debug step by step or check for uninitialized objects. It is generally common in the following situations:
+```go
+type Loader interface{ Foo() }
+var loader Loader
+loader.Foo() // invalid memory address or nil pointer dereference
+```
 
 ### Error "re-mock <xxx>, previous mock at: xxx"
 The function has been mocked repeatedly in the smallest unit, as below:
@@ -585,13 +746,43 @@ func main() {
 	fmt.Println(Foo())
 }
 ```
-Please refer to [PatchConvey](#supporting-patchconvey) to organize your test cases. If there is such a need, please refer to [Acquire Mocker](#acquire-mocker) to remock.
+For a function, it can only be mocked once in a PatchConvey (even without PatchConvey). Please refer to [PatchConvey](#supporting-patchconvey) to organize your test cases. If there is such a need, please refer to [Acquire Mocker](#acquire-mocker) to remock.
 
-### Don't mock system functions
-It is best not to directly mock system functions, as it may cause probabilistic crash issues. For example, mock `time.Now` will cause:
+### Error "args not match" / "Return Num of Func a does not match" / "Return value idx of rets can not convertible to"?
+- If using `Return`, check if the return parameters are consistent with the target function's return values
+- If using `To`, check if the input and output parameters are consistent with the target function
+- If using `When`, check if the input parameters are consistent with the target function
+- If the target and hook function signatures appear identical in the error, check if the import packages in the test code and target function code are consistent
+
+### Crash "signal SIGBUS: bus error"?
+Mac M series computers (darwin/arm64) have a higher probability of encountering this issue. You can retry multiple times. Currently, there is no elegant solution. Related discussion [here](https://github.com/bytedance/mockey/issues/68).
+```
+fatal error: unexpected signal during runtime execution
+[signal SIGBUS: bus error code=0x1 addr=0x10509aec0 pc=0x10509aec0]
+```
+
+### Crash "signal SIGSEGV: segmentation violation"?
+Lower version MacOS (10.x / 11.x) may have the following error. Currently, you can temporarily resolve it by disabling cgo with `go env -w CGO_ENABLED=0`:
+```
+fatal error: unexpected signal during runtime execution
+[signal SIGSEGV: segmentation violation code=0x1 addr=0xb01dfacedebac1e pc=0x7fff709a070a]
+```
+
+### Crash "semacquire not on the G stack"?
+It is best not to directly mock system functions as it may cause probabilistic crash issues. For example, mocking `time.Now` will cause:
 ```
 fatal error: semacquire not on the G stack
 ```
+
+### M series Mac + Go 1.18 goes to wrong branch?
+This is a bug in golang under arm64 architecture for specific versions. Please check if the golang version is 1.18.1～1.18.5. If so, upgrade the golang version.
+
+Golang fix MR:
+- [go/reflect: Incorrect behavior on arm64 when using MakeFunc / Call [1.18 backport] · Issue #53397](https://github.com/golang/go/issues/53397)
+- https://go-review.googlesource.com/c/go/+/405114/2/src/cmd/compile/internal/ssa/rewriteARM64.go#28709
+
+### Error "mappedReady and other memstats are not equal" / "index out of range" / "invalid reference to runtime.sysAlloc"？
+The version is too old, please upgrade to the latest version of mockey.
 
 ## License
 Mockey is distributed under the [Apache License](https://github.com/bytedance/mockey/blob/main/LICENSE-APACHE), version 2.0. The licenses of third party dependencies of Mockey are explained [here](https://github.com/bytedance/mockey/blob/main/licenses).

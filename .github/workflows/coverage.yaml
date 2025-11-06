@@ -13,9 +13,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.20"
+          go-version: "1.25"
       - name: Unit Test
-        run: MOCKEY_DEBUG=true go test -gcflags="all=-l -N" -coverprofile=coverage.txt ./...
+        run: go test -gcflags="all=-l -N" -coverprofile=coverage.txt ./...
       - name: Upload results to Codecov
         uses: codecov/codecov-action@v5
         with:

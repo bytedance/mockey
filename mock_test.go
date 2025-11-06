@@ -131,7 +131,7 @@ func TestMock(t *testing.T) {
 }
 
 func TestParam(t *testing.T) {
-	fmt.Printf("gid:%+v\n", tool.GetGoroutineID())
+	fmt.Printf("gid: %+v\n", tool.GetGoroutineID())
 	PatchConvey("test variant param", t, func() {
 		when := func(a int, bs ...int) bool {
 			return bs[0] == 1

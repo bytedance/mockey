@@ -33,7 +33,7 @@ func Write(target uintptr, data []byte) error {
 	if res != 0 {
 		return fmt.Errorf("write failed, code %v", res)
 	}
-	tool.DebugPrintf("Write end(linux)")
+	tool.DebugPrintf("Write end(linux)\n")
 	return nil
 }
 

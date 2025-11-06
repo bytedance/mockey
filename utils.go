@@ -41,7 +41,7 @@ func GetMethod(instance interface{}, methodName string) interface{} {
 			return unsafeMethodByName(instance, methodName)
 		}
 	}
-	tool.Assert(false, "can't reflect instance method :%v", methodName)
+	tool.Assert(false, "can't reflect instance method: %v", methodName)
 	return nil
 }
 
@@ -85,7 +85,7 @@ func GetPrivateMethod(instance interface{}, methodName string) interface{} {
 	if ok {
 		return m.Func.Interface()
 	}
-	tool.Assert(false, "can't reflect instance method :%v", methodName)
+	tool.Assert(false, "can't reflect instance method: %v", methodName)
 	return nil
 }
 
@@ -98,7 +98,7 @@ func GetNestedMethod(instance interface{}, methodName string) interface{} {
 			return m.Func.Interface()
 		}
 	}
-	tool.Assert(false, "can't reflect instance method :%v", methodName)
+	tool.Assert(false, "can't reflect instance method: %v", methodName)
 	return nil
 }
 
@@ -143,7 +143,7 @@ func getNestedMethod(val reflect.Value, methodName string) (reflect.Method, bool
 func unsafeMethodByName(instance interface{}, methodName string) interface{} {
 	typ, tfn, ok := unsafereflect.MethodByName(instance, methodName)
 	if !ok {
-		tool.Assert(false, "can't reflect instance method :%v", methodName)
+		tool.Assert(false, "can't reflect instance method: %v", methodName)
 		return nil
 	}
 	if typ == nil {
@@ -151,7 +151,7 @@ func unsafeMethodByName(instance interface{}, methodName string) interface{} {
 	}
 
 	if typ.Kind() != reflect.Func {
-		tool.Assert(false, "invalid instance method type: %v,%v", methodName, typ.Kind().String())
+		tool.Assert(false, "invalid instance method type: %v, %v", methodName, typ.Kind().String())
 		return nil
 	}
 

@@ -221,7 +221,7 @@ func (builder *MockBuilder) Build() *Mocker {
 func (mocker *Mocker) missReceiver(target reflect.Type, hook interface{}) bool {
 	hType := reflect.TypeOf(hook)
 	tool.Assert(hType.Kind() == reflect.Func, "Param(%v) a is not a func", hType.Kind())
-	tool.Assert(target.IsVariadic() == hType.IsVariadic(), "target:%v, hook:%v args not match", target, hook)
+	tool.Assert(target.IsVariadic() == hType.IsVariadic(), "target: %v, hook: %v args not match", target, hook)
 	// has receiver
 	if tool.CheckFuncArgs(target, hType, 0, 0) {
 		return false
@@ -229,7 +229,7 @@ func (mocker *Mocker) missReceiver(target reflect.Type, hook interface{}) bool {
 	if tool.CheckFuncArgs(target, hType, 1, 0) {
 		return true
 	}
-	tool.Assert(false, "target:%v, hook:%v args not match", target, hook)
+	tool.Assert(false, "target: %v, hook: %v args not match", target, hook)
 	return false
 }
 

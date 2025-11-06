@@ -37,9 +37,9 @@ func Assert(b bool, fmts ...interface{}) {
 }
 
 func AssertFunc(target interface{}) {
-	Assert(reflect.TypeOf(target).Kind() == reflect.Func, "'%v' is not a function")
+	Assert(reflect.TypeOf(target).Kind() == reflect.Func, "'%v' is not a function", target)
 }
 
 func AssertPtr(ptr interface{}) {
-	Assert(reflect.TypeOf(ptr).Kind() == reflect.Ptr, "'%v' is not a pointer")
+	Assert(reflect.TypeOf(ptr).Kind() == reflect.Ptr, "'%v' is not a pointer", ptr)
 }

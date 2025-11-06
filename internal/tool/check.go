@@ -23,7 +23,7 @@ import (
 func CheckReturnType(fn interface{}, results ...interface{}) {
 	t := reflect.TypeOf(fn)
 	Assert(t.Kind() == reflect.Func, "Param a is not a func")
-	Assert(t.NumOut() == len(results), "Return Num of Func a does not match : %v.， origin ret count: %d, input param count: %d", t, t.NumOut(), len(results))
+	Assert(t.NumOut() == len(results), "Return Num of Func a does not match: %v, origin ret count: %d, input param count: %d", t, t.NumOut(), len(results))
 	for i := 0; i < t.NumOut(); i++ {
 		if results[i] == nil {
 			continue
