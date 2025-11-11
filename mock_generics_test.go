@@ -39,8 +39,8 @@ func (g generic[T]) Value() T {
 	return g.a
 }
 
-func (g generic[T]) Value2(hint string) T {
-	return g.a + g.a
+func (g generic[T]) Value2(hint T) string {
+	return fmt.Sprintf("%v %v", g.a, hint)
 }
 
 func TestGeneric(t *testing.T) {
@@ -57,8 +57,8 @@ func TestGeneric(t *testing.T) {
 			MockGeneric(sum[float64]).Return(888).Build()
 			convey.So(sum[float64](1, 2), convey.ShouldEqual, 888)
 		})
-		PatchConvey("type", func() {
-			Mock((generic[int]).Value, OptGeneric).Return(999).Build()
+		PatchConvey("method", func() {
+			Mock(generic[int].Value, OptGeneric).Return(999).Build()
 			gi := generic[int]{a: 123}
 			convey.So(gi.Value(), convey.ShouldEqual, 999)
 
@@ -70,6 +70,34 @@ func TestGeneric(t *testing.T) {
 			gs := generic[string]{a: "abc"}
 			convey.So(gi.Value(), convey.ShouldEqual, 999)
 			convey.So(gs.Value2(arg1), convey.ShouldEqual, "mock")
+		})
+		PatchConvey("origin", func() {
+			PatchConvey("func", func() {
+				var origin = sum[int]
+				decorator := func(a, b int) int {
+					return origin(a, b) + 1
+				}
+				MockGeneric(sum[int]).To(decorator).Origin(&origin).Build()
+				convey.So(sum[int](1, 2), convey.ShouldEqual, 4)
+			})
+
+			PatchConvey("method", func() {
+				var origin = generic[string].Value2
+				decorator := func(a generic[string], hint string) string {
+					return "decorated " + origin(a, hint)
+				}
+				MockGeneric(generic[string].Value2).To(decorator).Origin(&origin).Build()
+				convey.So(generic[string]{a: "abc"}.Value2("123"), convey.ShouldEqual, "decorated abc 123")
+			})
+		})
+		PatchConvey("when", func() {
+			MockGeneric(sum[int]).To(func(a, b int) int {
+				return 0
+			}).When(func(a, b int) bool {
+				return a+b == 3
+			}).Build()
+			convey.So(sum[int](1, 2), convey.ShouldEqual, 0)
+			convey.So(sum[int](1, 1), convey.ShouldEqual, 2)
 		})
 	})
 }

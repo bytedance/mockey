@@ -93,7 +93,7 @@ func GetGenericJumpAddr(addr uintptr, maxScan uint64) uintptr {
 			rel := int32(inst.Args[0].(x86asm.Rel))
 			fnAddr := calcAddr(uintptr(unsafe.Pointer(&code[0]))+uintptr(pos+uint64(inst.Len)), rel)
 			isExtraCall, extraName := isGenericProxyCallExtra(fnAddr)
-			tool.DebugPrintf("found CALL, raw is: %x, rel: %v,  raw is: %x,  fnAddr: %v, isExtraCall: %v, extraName: %v\n", inst.String(), rel, fnAddr, isExtraCall, extraName)
+			tool.DebugPrintf("found CALL, raw is: %v, rel: %x, fnAddr: %x, isExtraCall: %v, extraName: %v\n", inst.String(), rel, fnAddr, isExtraCall, extraName)
 			if !isExtraCall {
 				allAddrs = append(allAddrs, fnAddr)
 			}

@@ -35,8 +35,8 @@ const (
 
 type Mocker struct {
 	target    reflect.Value // mock target value
-	hook      reflect.Value // mock hook
-	proxy     interface{}   // proxy function to origin
+	hook      reflect.Value // mock hook value
+	proxy     reflect.Value // proxy pointer value
 	times     int64
 	mockTimes int64
 	patch     *monkey.Patch
@@ -83,14 +83,15 @@ func MockUnsafe(target interface{}) *MockBuilder {
 	return Mock(target, OptUnsafe)
 }
 
-func (builder *MockBuilder) hookType() reflect.Type {
+// targetType returns the type of the target function with generic type info in the first argument if needed.
+func (builder *MockBuilder) targetType() reflect.Type {
 	targetType := reflect.TypeOf(builder.target)
 	if builder.generic {
 		targetIn := []reflect.Type{genericInfoType}
 		for i := 0; i < targetType.NumIn(); i++ {
 			targetIn = append(targetIn, targetType.In(i))
 		}
-		targetOut := []reflect.Type{}
+		var targetOut []reflect.Type
 		for i := 0; i < targetType.NumOut(); i++ {
 			targetOut = append(targetOut, targetType.Out(i))
 		}
@@ -237,11 +238,13 @@ func (mocker *Mocker) buildHook() {
 	proxySetter := mocker.buildProxy()
 
 	originExec := func(args []reflect.Value) []reflect.Value {
-		return tool.ReflectCall(reflect.ValueOf(mocker.proxy).Elem(), args)
+		return tool.ReflectCall(mocker.proxy.Elem(), args)
 	}
 
-	match := []func(args []reflect.Value) bool{}
-	exec := []func(args []reflect.Value) []reflect.Value{}
+	var (
+		match []func(args []reflect.Value) bool
+		exec  []func(args []reflect.Value) []reflect.Value
+	)
 
 	for i := range mocker.builder.conditions {
 		condition := mocker.builder.conditions[i]
@@ -265,7 +268,7 @@ func (mocker *Mocker) buildHook() {
 		}
 	}
 
-	mockerHook := reflect.MakeFunc(mocker.builder.hookType(), func(args []reflect.Value) []reflect.Value {
+	mockerHook := reflect.MakeFunc(mocker.builder.targetType(), func(args []reflect.Value) []reflect.Value {
 		proxySetter(args) // 设置origin调用proxy
 
 		mocker.access()
@@ -294,9 +297,9 @@ func (mocker *Mocker) buildHook() {
 	mocker.hook = mockerHook
 }
 
-// buildProx create a proxyCaller which could call origin directly
+// buildProxy create a proxyCaller which could call origin directly
 func (mocker *Mocker) buildProxy() func(args []reflect.Value) {
-	proxy := reflect.New(mocker.builder.hookType())
+	mocker.proxy = reflect.New(mocker.builder.targetType())
 
 	proxyCallerSetter := func(args []reflect.Value) {}
 	if mocker.builder.proxyCaller != nil {
@@ -313,11 +316,10 @@ func (mocker *Mocker) buildProxy() func(args []reflect.Value) {
 		}
 		proxyCallerSetter = func(args []reflect.Value) {
 			pElem.Set(reflect.MakeFunc(pElem.Type(), func(innerArgs []reflect.Value) (results []reflect.Value) {
-				return tool.ReflectCall(proxy.Elem(), append(args[0:shift], innerArgs...))
+				return tool.ReflectCall(mocker.proxy.Elem(), append(args[0:shift], innerArgs...))
 			}))
 		}
 	}
-	mocker.proxy = proxy.Interface()
 	return proxyCallerSetter
 }
 
@@ -327,7 +329,7 @@ func (mocker *Mocker) Patch() *Mocker {
 	if mocker.isPatched {
 		return mocker
 	}
-	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, reflect.ValueOf(mocker.proxy), mocker.builder.unsafe, mocker.builder.generic)
+	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, mocker.proxy, mocker.builder.unsafe, mocker.builder.generic)
 	mocker.isPatched = true
 	addToGlobal(mocker)
 

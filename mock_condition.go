@@ -44,7 +44,7 @@ func (m *mockCondition) SetWhenForce(when interface{}) {
 	out1 := wVal.Type().Out(0)
 	tool.Assert(out1.Kind() == reflect.Bool, "when func ret value not bool")
 
-	hookType := m.builder.hookType()
+	hookType := m.builder.targetType()
 	inTypes := []reflect.Type{}
 	for i := 0; i < hookType.NumIn(); i++ {
 		inTypes = append(inTypes, hookType.In(i))
@@ -72,7 +72,7 @@ func (m *mockCondition) SetReturnForce(results ...interface{}) {
 		}
 	}
 
-	hookType := m.builder.hookType()
+	hookType := m.builder.targetType()
 	m.hook = reflect.MakeFunc(hookType, func(_ []reflect.Value) []reflect.Value {
 		results := getResult()
 		tool.CheckReturnType(m.builder.target, results...)
@@ -95,10 +95,10 @@ func (m *mockCondition) SetTo(to interface{}) {
 
 func (m *mockCondition) SetToForce(to interface{}) {
 	hType := reflect.TypeOf(to)
-	tool.Assert(hType.Kind() == reflect.Func, "to a is not a func")
+	tool.Assert(hType.Kind() == reflect.Func, "to is not a func")
 	hasGeneric, hasReceiver := m.checkGenericAndReceiver(hType)
 	tool.Assert(m.builder.generic || !hasGeneric, "non-generic function should not have 'GenericInfo' as first argument")
-	m.hook = reflect.MakeFunc(m.builder.hookType(), func(args []reflect.Value) (results []reflect.Value) {
+	m.hook = reflect.MakeFunc(m.builder.targetType(), func(args []reflect.Value) (results []reflect.Value) {
 		results = tool.ReflectCall(reflect.ValueOf(to), m.adaptArgsForReflectCall(args, hasGeneric, hasReceiver))
 		return
 	}).Interface()
@@ -114,7 +114,7 @@ func (m *mockCondition) SetToForce(to interface{}) {
 //  4. func(info GenericInfo, self *struct, arg0 int ...)
 //
 // All above input hooks are legal, but we need to make an adaptation when calling then
-func (m *mockCondition) checkGenericAndReceiver(typ reflect.Type) (bool, bool) {
+func (m *mockCondition) checkGenericAndReceiver(typ reflect.Type) (hasGeneric bool, hasReceiver bool) {
 	targetType := reflect.TypeOf(m.builder.target)
 	tool.Assert(typ.Kind() == reflect.Func, "Param(%v) a is not a func", typ.Kind())
 	tool.Assert(targetType.IsVariadic() == typ.IsVariadic(), "target: %v, hook: %v args not match", targetType, typ)
@@ -133,7 +133,7 @@ func (m *mockCondition) checkGenericAndReceiver(typ reflect.Type) (bool, bool) {
 		return shiftTyp == 1, false
 	}
 	tool.Assert(false, "target: %v, hook: %v args not match", targetType, typ)
-	return false, false
+	return false, false // not here
 }
 
 // adaptArgsForReflectCall makes an adaption for reflect call
