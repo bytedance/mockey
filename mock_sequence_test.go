@@ -46,41 +46,78 @@ func TestSequenceRace(t *testing.T) {
 	})
 }
 
-func TestSequenceOpt(t *testing.T) {
-	PatchConvey("test sequenceOpt", t, func() {
+func TestSequence(t *testing.T) {
+	PatchConvey("test sequence", t, func() {
 		fn := func() (string, int) {
 			fmt.Println("original fn")
 			return "fn: not here", -1
 		}
 
-		tests := []struct {
-			Value1 string
-			Value2 int
-			Times  int
-		}{
-			{"Alice", 2, 3},
-			{"Bob", 3, 1},
-			{"Tom", 4, 1},
-			{"Jerry", 5, 2},
-		}
+		PatchConvey("normal", func() {
+			tests := []struct {
+				Value1 string
+				Value2 int
+				Times  int
+			}{
+				{"Alice", 2, 3},
+				{"Bob", 3, 1},
+				{"Tom", 4, 1},
+				{"Jerry", 5, 2},
+			}
 
-		seq := Sequence("Admin", 1)
-		for _, r := range tests {
-			seq.Then(r.Value1, r.Value2).Times(r.Times)
-		}
-		Mock(fn).Return(seq).Build()
-
-		for repeat := 3; repeat != 0; repeat-- {
-			v1, v2 := fn()
-			convey.So(v1, convey.ShouldEqual, "Admin")
-			convey.So(v2, convey.ShouldEqual, 1)
+			seq := Sequence("Admin", 1)
 			for _, r := range tests {
-				for rIndex := 0; rIndex < r.Times; rIndex++ {
-					v1, v2 := fn()
-					convey.So(v1, convey.ShouldEqual, r.Value1)
-					convey.So(v2, convey.ShouldEqual, r.Value2)
+				seq.Then(r.Value1, r.Value2).Times(r.Times)
+			}
+			Mock(fn).Return(seq).Build()
+
+			for repeat := 3; repeat != 0; repeat-- {
+				v1, v2 := fn()
+				convey.So(v1, convey.ShouldEqual, "Admin")
+				convey.So(v2, convey.ShouldEqual, 1)
+				for _, r := range tests {
+					for rIndex := 0; rIndex < r.Times; rIndex++ {
+						v1, v2 := fn()
+						convey.So(v1, convey.ShouldEqual, r.Value1)
+						convey.So(v2, convey.ShouldEqual, r.Value2)
+					}
 				}
 			}
-		}
+		})
+
+		PatchConvey("first empty", func() {
+			tests := []struct {
+				Value1 string
+				Value2 int
+				Times  int
+			}{
+				{"Admin", 1, 1},
+				{"Alice", 2, 3},
+				{"Bob", 3, 1},
+				{"Tom", 4, 1},
+				{"Jerry", 5, 2},
+			}
+
+			seq := Sequence()
+			for _, r := range tests {
+				seq.Then(r.Value1, r.Value2).Times(r.Times)
+			}
+			Mock(fn).Return(seq).Build()
+
+			for repeat := 3; repeat != 0; repeat-- {
+				for _, r := range tests {
+					for rIndex := 0; rIndex < r.Times; rIndex++ {
+						v1, v2 := fn()
+						convey.So(v1, convey.ShouldEqual, r.Value1)
+						convey.So(v2, convey.ShouldEqual, r.Value2)
+					}
+				}
+			}
+		})
+
+		PatchConvey("all empty", func() {
+			Mock(fn).Return(Sequence()).Build()
+			convey.So(func() { fn() }, convey.ShouldPanicWith, "sequence is empty")
+		})
 	})
 }
