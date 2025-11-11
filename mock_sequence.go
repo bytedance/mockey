@@ -50,6 +50,8 @@ type sequenceValue struct {
 
 func (s *sequence) GetNext() []interface{} {
 	s.readLock.Lock()
+	tool.Assert(len(s.values) > 0, "sequence is empty")
+
 	seqV := s.values[s.curV]
 	s.curT++
 	if s.curT >= seqV.t {
@@ -79,6 +81,9 @@ func (s *sequence) Times(t int) sequenceOpt {
 
 func Sequence(value ...interface{}) sequenceOpt {
 	seq := &sequence{}
+	if len(value) == 0 {
+		return seq
+	}
 	seq.Then(value...)
 	return seq
 }
