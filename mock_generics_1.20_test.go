@@ -1,3 +1,6 @@
+//go:build go1.20
+// +build go1.20
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -16,36 +19,7 @@
 
 package mockey
 
-type option struct {
-	unsafe  bool
-	generic *bool
-	method  *bool
-}
-
-type optionFn func(*option)
-
-func OptUnsafe(o *option) {
-	o.unsafe = true
-}
-
-func OptGeneric(o *option) {
-	var t = true
-	o.generic = &t
-}
-
-func OptMethod(o *option) {
-	var t = true
-	o.method = &t
-}
-
-func resolveOpt(target interface{}, fn ...optionFn) *option {
-	opt := &option{
-		unsafe:  false,
-		generic: nil,
-		method:  nil,
-	}
-	for _, f := range fn {
-		f(opt)
-	}
-	return opt
-}
+var (
+	mockGeneric = Mock
+	misjudgeOpt = []optionFn{OptMethod}
+)

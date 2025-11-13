@@ -21,6 +21,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/bytedance/mockey/internal/fn"
 	"github.com/bytedance/mockey/internal/monkey"
 	"github.com/bytedance/mockey/internal/tool"
 )
@@ -49,29 +50,26 @@ type Mocker struct {
 
 type MockBuilder struct {
 	target          interface{}      // mock target
-	proxyCaller     interface{}      // origin function caller hook
+	originPtr       interface{}      // origin caller
 	conditions      []*mockCondition // mock conditions
 	filterGoroutine FilterGoroutineType
 	gId             int64
 	unsafe          bool
-	generic         bool
+	adapter         fn.Adapter
 }
 
-// Mock mocks target function
-//
-// If target is a generic method or method of generic types, you need add a genericOpt, like this:
-//
-//	func f[int, float64](x int, y T1) T2
-//	Mock(f[int, float64], OptGeneric)
+// Mock mocks target function.
+// From go1.20, Mock can automatically judge whether the target is generic or not. Before go1.20, you need to use
+// MockGeneric to mock generic function.
 func Mock(target interface{}, opt ...optionFn) *MockBuilder {
 	tool.AssertFunc(target)
 
-	option := resolveOpt(opt...)
+	opts := resolveOpt(target, opt...)
 
 	builder := &MockBuilder{
 		target:  target,
-		unsafe:  option.unsafe,
-		generic: option.generic,
+		unsafe:  opts.unsafe,
+		adapter: fn.NewAdapter(target, opts.generic, opts.method),
 	}
 	builder.resetCondition()
 	return builder
@@ -79,25 +77,13 @@ func Mock(target interface{}, opt ...optionFn) *MockBuilder {
 
 // MockUnsafe has the full ability of the Mock function and removes some security restrictions. This is an alternative
 // when the Mock function fails. It may cause some unknown problems, so we recommend using Mock under normal conditions.
-func MockUnsafe(target interface{}) *MockBuilder {
-	return Mock(target, OptUnsafe)
+func MockUnsafe(target interface{}, opt ...optionFn) *MockBuilder {
+	return Mock(target, append(opt, OptUnsafe)...)
 }
 
-// targetType returns the type of the target function with generic type info in the first argument if needed.
+// targetType returns the type of the target function with generic type info if it's generic.
 func (builder *MockBuilder) targetType() reflect.Type {
-	targetType := reflect.TypeOf(builder.target)
-	if builder.generic {
-		targetIn := []reflect.Type{genericInfoType}
-		for i := 0; i < targetType.NumIn(); i++ {
-			targetIn = append(targetIn, targetType.In(i))
-		}
-		var targetOut []reflect.Type
-		for i := 0; i < targetType.NumOut(); i++ {
-			targetOut = append(targetOut, targetType.Out(i))
-		}
-		return reflect.FuncOf(targetIn, targetOut, targetType.IsVariadic())
-	}
-	return targetType
+	return builder.adapter.ExtendedTargetType()
 }
 
 func (builder *MockBuilder) resetCondition() *MockBuilder {
@@ -117,13 +103,13 @@ func (builder *MockBuilder) resetCondition() *MockBuilder {
 //
 // Origin only works when call origin hook directly, target will still be mocked in recursive call
 func (builder *MockBuilder) Origin(funcPtr interface{}) *MockBuilder {
-	tool.Assert(builder.proxyCaller == nil, "re-set builder origin")
+	tool.Assert(builder.originPtr == nil, "re-set builder origin")
 	return builder.origin(funcPtr)
 }
 
 func (builder *MockBuilder) origin(funcPtr interface{}) *MockBuilder {
 	tool.AssertPtr(funcPtr)
-	builder.proxyCaller = funcPtr
+	builder.originPtr = funcPtr
 	return builder
 }
 
@@ -214,37 +200,33 @@ func (builder *MockBuilder) FilterGoRoutine(filter FilterGoroutineType, gId int6
 
 func (builder *MockBuilder) Build() *Mocker {
 	mocker := Mocker{target: reflect.ValueOf(builder.target), builder: builder}
-	mocker.buildHook()
+	mocker.build()
 	mocker.Patch()
 	return &mocker
 }
 
-func (mocker *Mocker) missReceiver(target reflect.Type, hook interface{}) bool {
-	hType := reflect.TypeOf(hook)
-	tool.Assert(hType.Kind() == reflect.Func, "Param(%v) a is not a func", hType.Kind())
-	tool.Assert(target.IsVariadic() == hType.IsVariadic(), "target: %v, hook: %v args not match", target, hook)
-	// has receiver
-	if tool.CheckFuncArgs(target, hType, 0, 0) {
-		return false
-	}
-	if tool.CheckFuncArgs(target, hType, 1, 0) {
-		return true
-	}
-	tool.Assert(false, "target: %v, hook: %v args not match", target, hook)
-	return false
-}
+func (mocker *Mocker) build() {
+	var (
+		extraArgsGetter func() []reflect.Value
+		originExec      func(args []reflect.Value) []reflect.Value
+		match           []func(args []reflect.Value) bool
+		exec            []func(args []reflect.Value) []reflect.Value
+	)
 
-func (mocker *Mocker) buildHook() {
-	proxySetter := mocker.buildProxy()
+	mocker.proxy = reflect.New(mocker.builder.targetType())
 
-	originExec := func(args []reflect.Value) []reflect.Value {
+	originExec = func(args []reflect.Value) []reflect.Value {
 		return tool.ReflectCall(mocker.proxy.Elem(), args)
 	}
 
-	var (
-		match []func(args []reflect.Value) bool
-		exec  []func(args []reflect.Value) []reflect.Value
-	)
+	if originPtr := mocker.builder.originPtr; originPtr != nil {
+		origin := reflect.ValueOf(originPtr).Elem()
+		originType := origin.Type()
+		adapter := mocker.builder.adapter.ReversedInputAdapter("origin", originType)
+		origin.Set(reflect.MakeFunc(originType, func(args []reflect.Value) []reflect.Value {
+			return tool.ReflectCall(mocker.proxy.Elem(), adapter(args, extraArgsGetter()))
+		}))
+	}
 
 	for i := range mocker.builder.conditions {
 		condition := mocker.builder.conditions[i]
@@ -269,7 +251,10 @@ func (mocker *Mocker) buildHook() {
 	}
 
 	mockerHook := reflect.MakeFunc(mocker.builder.targetType(), func(args []reflect.Value) []reflect.Value {
-		proxySetter(args) // 设置origin调用proxy
+		if mocker.builder.originPtr != nil {
+			// Origin call need extra args, which only can be obtained during the execution of mockerHook.
+			extraArgsGetter = func() []reflect.Value { return args }
+		}
 
 		mocker.access()
 		switch mocker.builder.filterGoroutine {
@@ -297,39 +282,13 @@ func (mocker *Mocker) buildHook() {
 	mocker.hook = mockerHook
 }
 
-// buildProxy create a proxyCaller which could call origin directly
-func (mocker *Mocker) buildProxy() func(args []reflect.Value) {
-	mocker.proxy = reflect.New(mocker.builder.targetType())
-
-	proxyCallerSetter := func(args []reflect.Value) {}
-	if mocker.builder.proxyCaller != nil {
-		pVal := reflect.ValueOf(mocker.builder.proxyCaller)
-		tool.Assert(pVal.Kind() == reflect.Ptr && pVal.Elem().Kind() == reflect.Func, "origin receiver must be a function pointer")
-		pElem := pVal.Elem()
-
-		shift := 0
-		if mocker.builder.generic {
-			shift += 1
-		}
-		if mocker.missReceiver(mocker.target.Type(), pElem.Interface()) {
-			shift += 1
-		}
-		proxyCallerSetter = func(args []reflect.Value) {
-			pElem.Set(reflect.MakeFunc(pElem.Type(), func(innerArgs []reflect.Value) (results []reflect.Value) {
-				return tool.ReflectCall(mocker.proxy.Elem(), append(args[0:shift], innerArgs...))
-			}))
-		}
-	}
-	return proxyCallerSetter
-}
-
 func (mocker *Mocker) Patch() *Mocker {
 	mocker.lock.Lock()
 	defer mocker.lock.Unlock()
 	if mocker.isPatched {
 		return mocker
 	}
-	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, mocker.proxy, mocker.builder.unsafe, mocker.builder.generic)
+	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, mocker.proxy, mocker.builder.unsafe, mocker.builder.adapter.Generic())
 	mocker.isPatched = true
 	addToGlobal(mocker)
 
@@ -409,7 +368,7 @@ func (mocker *Mocker) Origin(funcPtr interface{}) *Mocker {
 func (mocker *Mocker) rePatch(do func()) *Mocker {
 	mocker.UnPatch()
 	do()
-	mocker.buildHook()
+	mocker.build()
 	mocker.Patch()
 	return mocker
 }

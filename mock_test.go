@@ -43,6 +43,12 @@ func (*Class) VariantParam(a string, b ...string) string {
 	return a
 }
 
+type class struct{ in string }
+
+func (c class) func1(hint string) string {
+	return fmt.Sprintf("%v %v", c.in, hint)
+}
+
 func MultiReturn() (int, int) {
 	return 0, 0
 }
@@ -197,6 +203,24 @@ func TestClass(t *testing.T) {
 			}
 
 			So(func() { Mock((*Class).FunA).When(func(p string) bool { return p == "a" }).To(mock).Build() }, ShouldPanic)
+		})
+		PatchConvey("func1 method misjudge", func() {
+			PatchConvey("with receiver", func() {
+				Mock(class.func1).To(func(c class, hint string) string {
+					So(c.in, ShouldEqual, "abc")
+					So(hint, ShouldEqual, "xxx")
+					return "mock"
+				}).Build()
+				So(class{in: "abc"}.func1("xxx"), ShouldEqual, "mock")
+			})
+			PatchConvey("without receiver", func() {
+				Mock(class.func1).To(func(hint string) string {
+					So(hint, ShouldEqual, "xxx")
+					return "mock"
+				}).Build()
+				So(class{in: "abc"}.func1("xxx"), ShouldEqual, "mock")
+			})
+
 		})
 	})
 }

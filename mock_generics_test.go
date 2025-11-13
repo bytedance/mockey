@@ -43,27 +43,35 @@ func (g generic[T]) Value2(hint T) string {
 	return fmt.Sprintf("%v %v", g.a, hint)
 }
 
+func (g *generic[T]) Value3(hint T) string {
+	return fmt.Sprintf("%v %v", g.a, hint)
+}
+
+func (g generic[T]) func1(hint T) string {
+	return fmt.Sprintf("%v %v", g.a, hint)
+}
+
 func TestGeneric(t *testing.T) {
 	PatchConvey("generic", t, func() {
 		PatchConvey("func", func() {
 			arg1, arg2 := 1, 2
-			MockGeneric(sum[int]).To(func(a, b int) int {
+			mockGeneric(sum[int]).To(func(a, b int) int {
 				convey.So(a, convey.ShouldEqual, arg1)
 				convey.So(b, convey.ShouldEqual, arg2)
 				return 999
 			}).Build()
 			convey.So(sum[int](1, 2), convey.ShouldEqual, 999)
 
-			MockGeneric(sum[float64]).Return(888).Build()
+			mockGeneric(sum[float64]).Return(888).Build()
 			convey.So(sum[float64](1, 2), convey.ShouldEqual, 888)
 		})
 		PatchConvey("method", func() {
-			Mock(generic[int].Value, OptGeneric).Return(999).Build()
+			mockGeneric(generic[int].Value).Return(999).Build()
 			gi := generic[int]{a: 123}
 			convey.So(gi.Value(), convey.ShouldEqual, 999)
 
 			arg1 := "hint"
-			Mock(GetMethod(generic[string]{}, "Value2"), OptGeneric).To(func(hint string) string {
+			mockGeneric(GetMethod(generic[string]{}, "Value2")).To(func(hint string) string {
 				convey.So(hint, convey.ShouldEqual, arg1)
 				return "mock"
 			}).Build()
@@ -71,13 +79,54 @@ func TestGeneric(t *testing.T) {
 			convey.So(gi.Value(), convey.ShouldEqual, 999)
 			convey.So(gs.Value2(arg1), convey.ShouldEqual, "mock")
 		})
+		PatchConvey("method, hook has receiver", func() {
+			PatchConvey("access the receiver field", func() {
+				var innerA int
+				mockGeneric(generic[int].Value2).To(func(i generic[int], hint int) string {
+					innerA = i.a
+					return "mock"
+				}).Build()
+				gi := generic[int]{a: 123}
+				res := gi.Value2(10000)
+				convey.So(res, convey.ShouldEqual, "mock")
+				convey.So(innerA, convey.ShouldEqual, 123)
+			})
+			PatchConvey("modify the receiver field", func() {
+				mockGeneric((*generic[int]).Value3).To(func(i *generic[int], hint int) string {
+					i.a = hint
+					return "mock"
+				}).Build()
+				gi := generic[int]{a: 123}
+				res := gi.Value3(10000)
+				convey.So(res, convey.ShouldEqual, "mock")
+				convey.So(gi.a, convey.ShouldEqual, 10000)
+			})
+		})
+		PatchConvey("func1 method misjudge", func() {
+			// FIXME: `func1` is misjudged as a function, `OptMethod` is used to explicitly specify it as method.
+			PatchConvey("without receiver", func() {
+				mockGeneric(generic[string].func1, misjudgeOpt...).To(func(hint string) string {
+					convey.So(hint, convey.ShouldEqual, "hint")
+					return "mock"
+				}).Build()
+				convey.So(generic[string]{a: "abc"}.func1("hint"), convey.ShouldEqual, "mock")
+			})
+			PatchConvey("with receiver", func() {
+				mockGeneric(generic[string].func1, misjudgeOpt...).To(func(g generic[string], hint string) string {
+					convey.So(g.a, convey.ShouldEqual, "abc")
+					convey.So(hint, convey.ShouldEqual, "hint")
+					return "mock"
+				}).Build()
+				convey.So(generic[string]{a: "abc"}.func1("hint"), convey.ShouldEqual, "mock")
+			})
+		})
 		PatchConvey("origin", func() {
 			PatchConvey("func", func() {
 				var origin = sum[int]
 				decorator := func(a, b int) int {
 					return origin(a, b) + 1
 				}
-				MockGeneric(sum[int]).To(decorator).Origin(&origin).Build()
+				mockGeneric(sum[int]).To(decorator).Origin(&origin).Build()
 				convey.So(sum[int](1, 2), convey.ShouldEqual, 4)
 			})
 
@@ -86,12 +135,21 @@ func TestGeneric(t *testing.T) {
 				decorator := func(a generic[string], hint string) string {
 					return "decorated " + origin(a, hint)
 				}
-				MockGeneric(generic[string].Value2).To(decorator).Origin(&origin).Build()
+				mockGeneric(generic[string].Value2).To(decorator).Origin(&origin).Build()
+				convey.So(generic[string]{a: "abc"}.Value2("123"), convey.ShouldEqual, "decorated abc 123")
+			})
+
+			PatchConvey("method without receiver", func() {
+				var origin func(string) string
+				decorator := func(hint string) string {
+					return "decorated " + origin(hint)
+				}
+				mockGeneric(generic[string].Value2).To(decorator).Origin(&origin).Build()
 				convey.So(generic[string]{a: "abc"}.Value2("123"), convey.ShouldEqual, "decorated abc 123")
 			})
 		})
 		PatchConvey("when", func() {
-			MockGeneric(sum[int]).To(func(a, b int) int {
+			mockGeneric(sum[int]).To(func(a, b int) int {
 				return 0
 			}).When(func(a, b int) bool {
 				return a+b == 3
@@ -146,7 +204,7 @@ func TestGenericArgValues(t *testing.T) {
 	PatchConvey("args-value", t, func() {
 		PatchConvey("single", func() {
 			var arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15 uintptr = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
-			MockGeneric(GenericsArg15[uintptr]).To(func(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15 uintptr) {
+			mockGeneric(GenericsArg15[uintptr]).To(func(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15 uintptr) {
 				convey.So(_1, convey.ShouldEqual, arg1)
 				convey.So(_2, convey.ShouldEqual, arg2)
 				convey.So(_3, convey.ShouldEqual, arg3)
@@ -167,7 +225,7 @@ func TestGenericArgValues(t *testing.T) {
 		})
 		PatchConvey("complex", func() {
 			var arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15 string = "1", "2", "3", "4", "5", " 6", "7", "8", "9", "10", "11", "12", "13", "14", "15"
-			MockGeneric(GenericsArg15[string]).To(func(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15 string) {
+			mockGeneric(GenericsArg15[string]).To(func(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15 string) {
 				convey.So(_1, convey.ShouldEqual, arg1)
 				convey.So(_2, convey.ShouldEqual, arg2)
 				convey.So(_3, convey.ShouldEqual, arg3)
@@ -188,7 +246,7 @@ func TestGenericArgValues(t *testing.T) {
 		})
 		PatchConvey("args-type", func() {
 			target := GenericsTemplate[int, float32, string, chan (int), []byte, struct{ _ int }]
-			MockGeneric(target).To(
+			mockGeneric(target).To(
 				func(info GenericInfo, t1 int, t2 float32, t3 string) (r1 chan (int), r2 []byte, r3 struct{ _ int }) {
 					convey.So(info.UsedParamType(0), convey.ShouldEqual, reflect.TypeOf(t1))
 					convey.So(info.UsedParamType(1), convey.ShouldEqual, reflect.TypeOf(t2))
@@ -232,22 +290,22 @@ func GenericArgRunner[T any](name string) {
 	var arg T
 
 	PatchConvey(name, func() {
-		MockGeneric(GenericsArg0[T]).Return().Build()
-		MockGeneric(GenericsArg1[T]).Return().Build()
-		MockGeneric(GenericsArg2[T]).Return().Build()
-		MockGeneric(GenericsArg3[T]).Return().Build()
-		MockGeneric(GenericsArg4[T]).Return().Build()
-		MockGeneric(GenericsArg5[T]).Return().Build()
-		MockGeneric(GenericsArg6[T]).Return().Build()
-		MockGeneric(GenericsArg7[T]).Return().Build()
-		MockGeneric(GenericsArg8[T]).Return().Build()
-		MockGeneric(GenericsArg9[T]).Return().Build()
-		MockGeneric(GenericsArg10[T]).Return().Build()
-		MockGeneric(GenericsArg11[T]).Return().Build()
-		MockGeneric(GenericsArg12[T]).Return().Build()
-		MockGeneric(GenericsArg13[T]).Return().Build()
-		MockGeneric(GenericsArg14[T]).Return().Build()
-		MockGeneric(GenericsArg15[T]).Return().Build()
+		mockGeneric(GenericsArg0[T]).Return().Build()
+		mockGeneric(GenericsArg1[T]).Return().Build()
+		mockGeneric(GenericsArg2[T]).Return().Build()
+		mockGeneric(GenericsArg3[T]).Return().Build()
+		mockGeneric(GenericsArg4[T]).Return().Build()
+		mockGeneric(GenericsArg5[T]).Return().Build()
+		mockGeneric(GenericsArg6[T]).Return().Build()
+		mockGeneric(GenericsArg7[T]).Return().Build()
+		mockGeneric(GenericsArg8[T]).Return().Build()
+		mockGeneric(GenericsArg9[T]).Return().Build()
+		mockGeneric(GenericsArg10[T]).Return().Build()
+		mockGeneric(GenericsArg11[T]).Return().Build()
+		mockGeneric(GenericsArg12[T]).Return().Build()
+		mockGeneric(GenericsArg13[T]).Return().Build()
+		mockGeneric(GenericsArg14[T]).Return().Build()
+		mockGeneric(GenericsArg15[T]).Return().Build()
 		convey.So(func() { GenericsArg0[T]() }, convey.ShouldNotPanic)
 		convey.So(func() { GenericsArg1(arg) }, convey.ShouldNotPanic)
 		convey.So(func() { GenericsArg2(arg, arg) }, convey.ShouldNotPanic)
@@ -309,22 +367,22 @@ func GenericsRet15[T any]() (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _ T) {
 func GenericRetRunner[T any](name string) {
 	var arg T
 	PatchConvey(name, func() {
-		MockGeneric(GenericsRet0[T]).Return().Build()
-		MockGeneric(GenericsRet1[T]).Return(arg).Build()
-		MockGeneric(GenericsRet2[T]).Return(arg, arg).Build()
-		MockGeneric(GenericsRet3[T]).Return(arg, arg, arg).Build()
-		MockGeneric(GenericsRet4[T]).Return(arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet5[T]).Return(arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet6[T]).Return(arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet7[T]).Return(arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet8[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet9[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet10[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet11[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet12[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet13[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet14[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsRet15[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet0[T]).Return().Build()
+		mockGeneric(GenericsRet1[T]).Return(arg).Build()
+		mockGeneric(GenericsRet2[T]).Return(arg, arg).Build()
+		mockGeneric(GenericsRet3[T]).Return(arg, arg, arg).Build()
+		mockGeneric(GenericsRet4[T]).Return(arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet5[T]).Return(arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet6[T]).Return(arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet7[T]).Return(arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet8[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet9[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet10[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet11[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet12[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet13[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet14[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsRet15[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
 		convey.So(func() { GenericsRet0[T]() }, convey.ShouldNotPanic)
 		convey.So(func() { GenericsRet1[T]() }, convey.ShouldNotPanic)
 		convey.So(func() { GenericsRet2[T]() }, convey.ShouldNotPanic)
@@ -407,22 +465,22 @@ func GenericsArgRet15[T any](_, _, _, _, _, _, _, _, _, _, _, _, _, _, _ T) (_, 
 func GenericArgRetRunner[T any](name string) {
 	var arg T
 	PatchConvey(name, func() {
-		MockGeneric(GenericsArgRet0[T]).Return().Build()
-		MockGeneric(GenericsArgRet1[T]).Return(arg).Build()
-		MockGeneric(GenericsArgRet2[T]).Return(arg, arg).Build()
-		MockGeneric(GenericsArgRet3[T]).Return(arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet4[T]).Return(arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet5[T]).Return(arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet6[T]).Return(arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet7[T]).Return(arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet8[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet9[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet10[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet11[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet12[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet13[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet14[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
-		MockGeneric(GenericsArgRet15[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet0[T]).Return().Build()
+		mockGeneric(GenericsArgRet1[T]).Return(arg).Build()
+		mockGeneric(GenericsArgRet2[T]).Return(arg, arg).Build()
+		mockGeneric(GenericsArgRet3[T]).Return(arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet4[T]).Return(arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet5[T]).Return(arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet6[T]).Return(arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet7[T]).Return(arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet8[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet9[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet10[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet11[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet12[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet13[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet14[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
+		mockGeneric(GenericsArgRet15[T]).Return(arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg, arg).Build()
 		convey.So(func() { GenericsArgRet0[T]() }, convey.ShouldNotPanic)
 		convey.So(func() { GenericsArgRet1(arg) }, convey.ShouldNotPanic)
 		convey.So(func() { GenericsArgRet2(arg, arg) }, convey.ShouldNotPanic)
