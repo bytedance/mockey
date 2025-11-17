@@ -15,7 +15,7 @@ jobs:
         with:
           go-version: "1.25"
       - name: Unit Test
-        run: go test -gcflags="all=-l -N" -coverprofile=coverage.txt ./...
+        run: go test -gcflags="all=-l -N" -coverprofile=coverage.txt -timeout 30s ./...
       - name: Upload results to Codecov
         uses: codecov/codecov-action@v5
         with:
