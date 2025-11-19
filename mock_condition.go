@@ -40,21 +40,22 @@ func (m *mockCondition) SetWhen(when interface{}) {
 
 func (m *mockCondition) SetWhenForce(when interface{}) {
 	wVal := reflect.ValueOf(when)
-	tool.Assert(wVal.Type().NumOut() == 1, "when func ret value not bool")
+	wTyp := wVal.Type()
+	tool.Assert(wTyp.NumOut() == 1, "when func ret value not bool")
 	out1 := wVal.Type().Out(0)
 	tool.Assert(out1.Kind() == reflect.Bool, "when func ret value not bool")
 
-	hookType := m.builder.hookType()
-	inTypes := []reflect.Type{}
-	for i := 0; i < hookType.NumIn(); i++ {
-		inTypes = append(inTypes, hookType.In(i))
-	}
+	adapter := m.builder.adapter.InputAdapter("when", wTyp)
 
-	hasGeneric, hasReceiver := m.checkGenericAndReceiver(wVal.Type())
-	whenType := reflect.FuncOf(inTypes, []reflect.Type{out1}, hookType.IsVariadic())
-	m.when = reflect.MakeFunc(whenType, func(args []reflect.Value) (results []reflect.Value) {
-		results = tool.ReflectCall(wVal, m.adaptArgsForReflectCall(args, hasGeneric, hasReceiver))
-		return
+	var inTypes []reflect.Type
+	targetType := m.builder.targetType()
+	for i := 0; i < targetType.NumIn(); i++ {
+		inTypes = append(inTypes, targetType.In(i))
+	}
+	whenType := reflect.FuncOf(inTypes, []reflect.Type{out1}, targetType.IsVariadic())
+
+	m.when = reflect.MakeFunc(whenType, func(args []reflect.Value) []reflect.Value {
+		return tool.ReflectCall(wVal, adapter(args))
 	}).Interface()
 }
 
@@ -72,10 +73,10 @@ func (m *mockCondition) SetReturnForce(results ...interface{}) {
 		}
 	}
 
-	hookType := m.builder.hookType()
+	hookType := m.builder.targetType()
 	m.hook = reflect.MakeFunc(hookType, func(_ []reflect.Value) []reflect.Value {
 		results := getResult()
-		tool.CheckReturnType(m.builder.target, results...)
+		tool.CheckReturnValues(hookType, results...)
 		valueResults := make([]reflect.Value, 0)
 		for i, result := range results {
 			rValue := reflect.Zero(hookType.Out(i))
@@ -94,62 +95,10 @@ func (m *mockCondition) SetTo(to interface{}) {
 }
 
 func (m *mockCondition) SetToForce(to interface{}) {
-	hType := reflect.TypeOf(to)
-	tool.Assert(hType.Kind() == reflect.Func, "to a is not a func")
-	hasGeneric, hasReceiver := m.checkGenericAndReceiver(hType)
-	tool.Assert(m.builder.generic || !hasGeneric, "non-generic function should not have 'GenericInfo' as first argument")
-	m.hook = reflect.MakeFunc(m.builder.hookType(), func(args []reflect.Value) (results []reflect.Value) {
-		results = tool.ReflectCall(reflect.ValueOf(to), m.adaptArgsForReflectCall(args, hasGeneric, hasReceiver))
-		return
+	toType := reflect.TypeOf(to)
+	m.builder.adapter.CheckReturnArgs("hook", toType)
+	adapter := m.builder.adapter.InputAdapter("hook", toType)
+	m.hook = reflect.MakeFunc(m.builder.targetType(), func(args []reflect.Value) (results []reflect.Value) {
+		return tool.ReflectCall(reflect.ValueOf(to), adapter(args))
 	}).Interface()
-}
-
-// checkGenericAndReceiver check if typ has GenericsInfo and selfReceiver as argument
-//
-// The hook function will look like func(_ GenericInfo, self *struct, arg0 int ...)
-// When we use 'When' or 'To', our input hook function will looks like:
-//  1. func(arg0 int ...)
-//  2. func(info GenericInfo, arg0 int ...)
-//  3. func(self *struct, arg0 int ...)
-//  4. func(info GenericInfo, self *struct, arg0 int ...)
-//
-// All above input hooks are legal, but we need to make an adaptation when calling then
-func (m *mockCondition) checkGenericAndReceiver(typ reflect.Type) (bool, bool) {
-	targetType := reflect.TypeOf(m.builder.target)
-	tool.Assert(typ.Kind() == reflect.Func, "Param(%v) a is not a func", typ.Kind())
-	tool.Assert(targetType.IsVariadic() == typ.IsVariadic(), "target: %v, hook: %v args not match", targetType, typ)
-
-	shiftTyp := 0
-	if typ.NumIn() > 0 && typ.In(0) == genericInfoType {
-		shiftTyp = 1
-	}
-
-	// has receiver
-	if tool.CheckFuncArgs(targetType, typ, 0, shiftTyp) {
-		return shiftTyp == 1, true
-	}
-
-	if tool.CheckFuncArgs(targetType, typ, 1, shiftTyp) {
-		return shiftTyp == 1, false
-	}
-	tool.Assert(false, "target: %v, hook: %v args not match", targetType, typ)
-	return false, false
-}
-
-// adaptArgsForReflectCall makes an adaption for reflect call
-//
-// see (*mockCondition).checkGenericAndReceiver for more info
-func (m *mockCondition) adaptArgsForReflectCall(args []reflect.Value, hasGeneric, hasReceiver bool) []reflect.Value {
-	adaption := []reflect.Value{}
-	if m.builder.generic {
-		if hasGeneric {
-			adaption = append(adaption, args[0])
-		}
-		args = args[1:]
-	}
-	if !hasReceiver {
-		args = args[1:]
-	}
-	adaption = append(adaption, args...)
-	return adaption
 }

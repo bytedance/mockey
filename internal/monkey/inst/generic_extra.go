@@ -46,7 +46,7 @@ var proxyCallRace = map[uintptr]string{}
 func isGenericProxyCallExtra(addr uintptr) (bool, string) {
 	/*
 		When function argument size is too big, golang will use duff-copy
-		to get better performance. Thus we will see more call-instruction
+		to get better performance. Thus, we will see more call-instruction
 		in asm code.
 		For example, assume struct type like this:
 			```
