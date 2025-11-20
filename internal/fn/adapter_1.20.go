@@ -66,7 +66,7 @@ func (a *AdapterImpl) init() *AdapterImpl {
 
 	a.targetType = reflect.TypeOf(a.target)
 	a.extendedTargetType = a.extendedTargetType0()
-	tool.DebugPrintf("[AdapterImpl.init] generic: %v, method: %v\n", a.generic, a.method)
+	tool.DebugPrintf("[AdapterImpl.init] generic: %v, method: %v, extendedTargetType: %v\n", a.generic, a.method, a.extendedTargetType)
 	return a
 }
 
@@ -75,15 +75,20 @@ func (a *AdapterImpl) extendedTargetType0() reflect.Type {
 		return a.targetType
 	}
 	var (
-		targetIn, targetOut []reflect.Type
+		targetIn      []reflect.Type
+		targetInShift int
+		targetOut     []reflect.Type
 	)
-	for i := 0; i < a.targetType.NumIn(); i++ {
-		if i == 0 && !a.method { // for functions, generic information needs to be inserted at position 0
-			targetIn = append(targetIn, genericInfoType)
-		}
-		if i == 1 && a.method { // for methods, generic information needs to be inserted at position 1 after go1.20
-			targetIn = append(targetIn, genericInfoType)
-		}
+	if a.method {
+		// for methods, generic information needs to be inserted at position 1 after go1.20
+		targetIn = []reflect.Type{a.targetType.In(0), genericInfoType}
+		targetInShift = 1
+	} else {
+		// for functions, generic information needs to be inserted at position 0
+		targetIn = []reflect.Type{genericInfoType}
+		targetInShift = 0
+	}
+	for i := targetInShift; i < a.targetType.NumIn(); i++ {
 		targetIn = append(targetIn, a.targetType.In(i))
 	}
 	for i := 0; i < a.targetType.NumOut(); i++ {

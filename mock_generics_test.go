@@ -122,12 +122,12 @@ func TestGeneric(t *testing.T) {
 		})
 		PatchConvey("origin", func() {
 			PatchConvey("func", func() {
-				var origin = sum[int]
-				decorator := func(a, b int) int {
+				var origin = sum[float64]
+				decorator := func(a, b float64) float64 {
 					return origin(a, b) + 1
 				}
-				mockGeneric(sum[int]).To(decorator).Origin(&origin).Build()
-				convey.So(sum[int](1, 2), convey.ShouldEqual, 4)
+				mockGeneric(sum[float64]).To(decorator).Origin(&origin).Build()
+				convey.So(sum[float64](1, 2), convey.ShouldEqual, 4)
 			})
 
 			PatchConvey("method", func() {
@@ -149,13 +149,13 @@ func TestGeneric(t *testing.T) {
 			})
 		})
 		PatchConvey("when", func() {
-			mockGeneric(sum[int]).To(func(a, b int) int {
+			mockGeneric(sum[float64]).To(func(a, b float64) float64 {
 				return 0
-			}).When(func(a, b int) bool {
+			}).When(func(a, b float64) bool {
 				return a+b == 3
 			}).Build()
-			convey.So(sum[int](1, 2), convey.ShouldEqual, 0)
-			convey.So(sum[int](1, 1), convey.ShouldEqual, 2)
+			convey.So(sum[float64](1, 2), convey.ShouldEqual, 0)
+			convey.So(sum[float64](1, 1), convey.ShouldEqual, 2)
 		})
 	})
 }

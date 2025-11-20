@@ -35,9 +35,12 @@ func (f *A0) Bar(i int) {}
 
 func Foo[T any](t T) {}
 
+func NoArgs[T any]() {}
+
 type A[T any] struct {
 	Inner T
 }
 
 func (f A[T]) Foo(i int)       {}
 func (f *A[T]) Bar(i int, t T) {}
+func (f *A[T]) NoArgs()        {}
