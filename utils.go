@@ -166,7 +166,7 @@ func unsafeMethodByName(instance interface{}, methodName string) interface{} {
 
 	hook := reflect.FuncOf(in, out, typ.IsVariadic())
 	vt := reflect.Zero(hook).Interface()
-	*(*uintptr)(unsafe.Pointer(uintptr(unsafe.Pointer(&vt)) + 8)) = uintptr(unsafe.Pointer(tfn))
+	*(*uintptr)(unsafe.Pointer(uintptr(unsafe.Pointer(&vt)) + 8)) = uintptr(tfn)
 	return vt
 }
 
