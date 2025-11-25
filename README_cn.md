@@ -9,7 +9,7 @@
 [![OpenIssue](https://img.shields.io/github/issues/bytedance/mockey)](https://github.com/bytedance/mockey/issues)
 [![ClosedIssue](https://img.shields.io/github/issues-closed/bytedance/mockey)](https://github.com/bytedance/mockey/issues?q=is%3Aissue+is%3Aclosed)
 
-Mockey 是一个简单易用的 Golang 打桩库，可以快速方便地进行函数和变量的 mock。目前，mockey 已广泛应用于字节跳动服务的单元测试编写中（7k+ 仓库）并积极维护，且已经成为一些部门的单元测试标准。它的底层原理是在运行时重写函数指令，这一点和 [gomonkey](https://github.com/agiledragon/gomonkey) 类似。
+Mockey 是一个简单易用的 Golang 打桩库，可以快速方便地进行函数和变量的 mock。目前，mockey 已广泛应用于字节跳动服务的单元测试编写中（7k+ 仓库）并积极维护，且已经成为一些部门的单元测试标准。它的底层原理是在运行时重写函数指令，这一点和 [monkey](https://github.com/bouk/monkey) 或 [gomonkey](https://github.com/agiledragon/gomonkey) 类似。
 
 Mockey 使得 mock 函数、方法和变量变得容易，不需要将所有依赖指定为接口类型并注入对应的测试实现。
 
@@ -142,6 +142,8 @@ func main() {
 ```
 
 ### 泛型函数/方法
+> 从 mockey v1.3.0 版本开始，`Mock`试验性地加入了自动识别泛型的能力（针对 go1.20+），可以使用`Mock`直接替换`MockGeneric`
+
 使用 `MockGeneric` 来 mock 泛型函数/方法：
 ```go
 package main
@@ -175,7 +177,7 @@ func main() {
 }
 ```
 
-**注意**：Golang 泛型对于同底层类型的不同类型，其泛型实现是共用的。比如 `type MyString string` 中 `MyString` 和 `string` 的实现是一套。因此对于其中一种类型的 mock 会干扰另一种类型：
+另外，Golang 泛型对于同底层类型的不同类型，其泛型实现是共用的。比如 `type MyString string` 中 `MyString` 和 `string` 的实现是一套。因此对于其中一种类型的 mock 会干扰另一种类型，进一步区分需要使用 `GenericInfo` 来判断具体类型
 ```go
 package main
 
