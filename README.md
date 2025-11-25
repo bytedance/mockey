@@ -751,6 +751,8 @@ func main() {
 ```
 For a function, it can only be mocked once in a PatchConvey (even without PatchConvey). Please refer to [PatchConvey](#supporting-patchconvey) to organize your test cases. If there is such a need, please refer to [Acquire Mocker](#acquire-mocker) to remock.
 
+If you encounter this error when mocking the same generic function with different type arguments, it may be caused by the fact that the gcshape of different arguments is the same. For details, see the [Generic function/method](#generic-functionmethod) section.
+
 ### Error "args not match" / "Return Num of Func a does not match" / "Return value idx of rets can not convertible to"?
 - If using `Return`, check if the return parameters are consistent with the target function's return values
 - If using `To`, check if the input and output parameters are consistent with the target function

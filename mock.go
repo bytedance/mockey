@@ -389,8 +389,11 @@ func (mocker *Mocker) MockTimes() int {
 	return int(atomic.LoadInt64(&mocker.mockTimes))
 }
 
+// key returns the unique key of the mocker.
+// - non-generic function: equal to mocker.target.Pointer()
+// - generic function: the real address of the implementation
 func (mocker *Mocker) key() uintptr {
-	return mocker.target.Pointer()
+	return mocker.patch.Base()
 }
 
 func (mocker *Mocker) name() string {

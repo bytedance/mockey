@@ -49,17 +49,19 @@ func PatchConvey(items ...interface{}) {
 }
 
 func addToGlobal(mocker mockerInstance) {
-	tool.DebugPrintf("%v added\n", mocker.key())
-	last, ok := gMocker[len(gMocker)-1][mocker.key()]
+	key := mocker.key()
+	tool.DebugPrintf("%v added\n", key)
+	last, ok := gMocker[len(gMocker)-1][key]
 	if ok {
-		tool.Assert(!ok, "re-mock %v, previous mock at: %v", mocker.name(), last.caller())
+		tool.Assert(!ok, "re-mock %v, previous mock at: %v", last.name(), last.caller())
 	}
-	gMocker[len(gMocker)-1][mocker.key()] = mocker
+	gMocker[len(gMocker)-1][key] = mocker
 }
 
 func removeFromGlobal(mocker mockerInstance) {
-	tool.DebugPrintf("%v removed\n", mocker.key())
-	delete(gMocker[len(gMocker)-1], mocker.key())
+	key := mocker.key()
+	tool.DebugPrintf("%v removed\n", key)
+	delete(gMocker[len(gMocker)-1], key)
 }
 
 // UnPatchAll unpatch all mocks in current 'PatchConvey' context
