@@ -245,9 +245,9 @@ func TestGenericArgValues(t *testing.T) {
 			GenericsArg15(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15)
 		})
 		PatchConvey("args-type", func() {
-			target := GenericsTemplate[int, float32, string, chan (int), []byte, struct{ _ int }]
+			target := GenericsTemplate[int, float32, string, chan int, []byte, struct{ _ int }]
 			mockGeneric(target).To(
-				func(info GenericInfo, t1 int, t2 float32, t3 string) (r1 chan (int), r2 []byte, r3 struct{ _ int }) {
+				func(info GenericInfo, t1 int, t2 float32, t3 string) (r1 chan int, r2 []byte, r3 struct{ _ int }) {
 					convey.So(info.UsedParamType(0), convey.ShouldEqual, reflect.TypeOf(t1))
 					convey.So(info.UsedParamType(1), convey.ShouldEqual, reflect.TypeOf(t2))
 					convey.So(info.UsedParamType(2), convey.ShouldEqual, reflect.TypeOf(t3))

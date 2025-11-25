@@ -27,7 +27,7 @@ func TestSysAlloc(t *testing.T) {
 		convey.So(func() {
 			data := AllocatePage()
 
-			// try write first and last byte of data
+			// try to write first and last byte of data
 			data[0] = 0
 			data[len(data)-1] = 0
 

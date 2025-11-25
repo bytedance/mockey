@@ -8,7 +8,7 @@ English | [中文](README_cn.md)
 [![OpenIssue](https://img.shields.io/github/issues/bytedance/mockey)](https://github.com/bytedance/mockey/issues)
 [![ClosedIssue](https://img.shields.io/github/issues-closed/bytedance/mockey)](https://github.com/bytedance/mockey/issues?q=is%3Aissue+is%3Aclosed)
 
-Mockey is a simple and easy-to-use golang mock library, which can quickly and conveniently mock functions and variables. At present, it is widely used in the unit test writing of ByteDance services (7k+ repos) and is actively maintained. In essence it rewrites function instructions at runtime similarly to [gomonkey](https://github.com/agiledragon/gomonkey).
+Mockey is a simple and easy-to-use golang mock library, which can quickly and conveniently mock functions and variables. At present, it is widely used in the unit test writing of ByteDance services (7k+ repos) and is actively maintained. In essence, it rewrites function instructions at runtime similarly to [monkey](https://github.com/bouk/monkey) or [gomonkey](https://github.com/agiledragon/gomonkey).
 
 Mockey makes it easy to replace functions, methods and variables with mocks reducing the need to specify all dependencies as interfaces.
 > 1. Mockey requires **inlining and compilation optimization to be disabled** during compilation, or it won't work. See the [FAQs](#how-to-disable-inline-and-compile-optimization) for details.
@@ -140,6 +140,8 @@ func main() {
 ```
 
 ### Generic function/method
+> Starting from mockey v1.3.0, `Mock` experimentally adds the ability to automatically identify generics (for go1.20+), you can use `Mock` to directly replace `MockGeneric`
+
 Use `MockGeneric` to mock generic function/method:
 ```go
 package main
@@ -173,7 +175,7 @@ func main() {
 }
 ```
 
-**Note**: Golang generics share implementation for different types with the same underlying type. For example, in `type MyString string`, `MyString` and `string` share one implementation. Therefore, mocking one type will interfere with the other:
+Additionally, Golang generics share implementation for different types with the same underlying type. For example, in `type MyString string`, `MyString` and `string` share one implementation. Therefore, mocking one type will interfere with the other. To further distinguish, you need to use `GenericInfo` to determine the specific type:
 ```go
 package main
 

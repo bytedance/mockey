@@ -34,7 +34,7 @@ type GenericInfo uintptr
 //	UsedParamType(0) == reflect.TypeOf(int(0))
 //	UsedParamType(1) == reflect.TypeOf(float64(0))
 //
-// If index n is out of range, or the derived types have more complex structure(for example: define an generic struct
+// If index n is out of range, or the derived types have more complex structure(for example: define a generic struct
 // in a generic function using generic types, unused parameterized type etc.), this function may return unexpected value
 // or cause unrecoverable runtime error . So it is NOT RECOMMENDED to use this function unless you actually knows what
 // you are doing.

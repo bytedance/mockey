@@ -44,7 +44,6 @@ type Adapter interface {
 	//  2. method:
 	//     a. non-generic method: func(self *struct, inArgs) outArgs OR func(inArgs) outArgs
 	//     b. generic method: func(GenericInfo, self *struct, inArgs) outArgs OR func(self *struct, inArgs) outArgs OR func(inArgs) outArgs
-
 	InputAdapter(inputName string, inputType reflect.Type) func([]reflect.Value) []reflect.Value
 
 	// ReversedInputAdapter generates an adapter function to adapt the input arguments of the inputType to the ExtendedTargetType().
