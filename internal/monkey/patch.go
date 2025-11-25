@@ -33,6 +33,11 @@ type Patch struct {
 	base uintptr
 }
 
+// Base returns the address of the patched function.
+func (p *Patch) Base() uintptr {
+	return p.base
+}
+
 // Unpatch restores the patched function to the original function.
 func (p *Patch) Unpatch() {
 	mem.WriteWithSTW(p.base, p.code[:p.size])

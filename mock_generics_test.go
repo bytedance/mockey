@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"unsafe"
 
 	"github.com/smartystreets/goconvey/convey"
 )
@@ -49,6 +50,14 @@ func (g *generic[T]) Value3(hint T) string {
 
 func (g generic[T]) func1(hint T) string {
 	return fmt.Sprintf("%v %v", g.a, hint)
+}
+
+type genericMap[K comparable, V any] struct {
+	m map[K]V
+}
+
+func (gm *genericMap[K, V]) Get(key K) V {
+	return gm.m[key]
 }
 
 func TestGeneric(t *testing.T) {
@@ -156,6 +165,40 @@ func TestGeneric(t *testing.T) {
 			}).Build()
 			convey.So(sum[float64](1, 2), convey.ShouldEqual, 0)
 			convey.So(sum[float64](1, 1), convey.ShouldEqual, 2)
+		})
+		PatchConvey("same gcshape", func() {
+			a, b := 12345, "12345"
+			PatchConvey("normal", func() {
+				MockGeneric((*genericMap[int32, *int]).Get).To(func(i GenericInfo, m *genericMap[int32, *int], key int32) *int {
+					// 1.20+
+					switch ut := i.UsedParamType(2); ut {
+					case reflect.TypeOf((*int)(nil)):
+						return &a
+					case reflect.TypeOf((*string)(nil)):
+						return (*int)(unsafe.Pointer(&b))
+					}
+					// below 1.20
+					switch ut := i.UsedParamType(1); ut {
+					case reflect.TypeOf((*int)(nil)):
+						return &a
+					case reflect.TypeOf((*string)(nil)):
+						return (*int)(unsafe.Pointer(&b))
+					}
+					panic("not here")
+				}).Build()
+				res1 := new(genericMap[int32, *int]).Get(1)
+				convey.So(res1, convey.ShouldEqual, &a)
+				convey.So(*res1, convey.ShouldEqual, 12345)
+				res2 := new(genericMap[int32, *string]).Get(2)
+				convey.So(res2, convey.ShouldEqual, &b)
+				convey.So(*res2, convey.ShouldEqual, "12345")
+			})
+			PatchConvey("re-mock", func() {
+				convey.So(func() {
+					MockGeneric((*genericMap[int32, *int]).Get).Return(&a).Build()
+					MockGeneric((*genericMap[int32, *string]).Get).Return(&b).Build()
+				}, convey.ShouldPanic)
+			})
 		})
 	})
 }

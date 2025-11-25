@@ -754,6 +754,8 @@ func main() {
 ```
 对于一个函数而言，在一个 PatchConvey 中（没有也是一样）只能 mock 一次，请参考 PatchConvey 说明小节来组织您的测试用例。如果确实有多次 mock 的需求，请获取 Mocker 来重新 mock，参考[获取 Mocker](#获取-mocker)
 
+如果在 mock 不同类型实参的同一泛型函数时出现这个错误，则可能是不同实参的 gcshape 相同导致的，详见[泛型函数/方法](#泛型函数方法)小节。
+
 ### 错误 "args not match" / "Return Num of Func a does not match" / "Return value idx of rets can not convertible to"？
 - 如果是使用了 `Return`，检查是否 return 参数和目标函数的返回值一致
 - 如果是使用了 `To`，检查是否入参和出参和目标函数一致
