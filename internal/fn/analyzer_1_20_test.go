@@ -1,22 +1,6 @@
 //go:build go1.20
 // +build go1.20
 
-/*
- * Copyright 2022 ByteDance Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package fn
 
 import (
@@ -27,7 +11,31 @@ import (
 	"github.com/bytedance/mockey/internal/fn/type4test"
 )
 
-func TestAnalyzer_IsGeneric(t *testing.T) {
+func TestAnalyzerImpl_RuntimeTargetType(t *testing.T) {
+	type fields struct {
+		target interface{}
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   reflect.Type
+	}{
+		{"type4test.Foo[string]", fields{type4test.Foo[string]}, reflect.TypeOf(func(GenericInfo, string) {})},
+		{"type4test.NoArgs[string]}", fields{type4test.NoArgs[string]}, reflect.TypeOf(func(GenericInfo) {})},
+		{"(*type4test.A[string]).Foo", fields{(*type4test.A[string]).Foo}, reflect.TypeOf(func(*type4test.A[string], GenericInfo, int) {})},
+		{"(*type4test.A[string]).NoArgs", fields{(*type4test.A[string]).NoArgs}, reflect.TypeOf(func(*type4test.A[string], GenericInfo) {})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := NewAnalyzer(tt.fields.target, nil, nil)
+			if got := a.RuntimeTargetType(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("RuntimeTargetType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAnalyzerImpl_IsGeneric(t *testing.T) {
 	tests := []struct {
 		name string
 		fn   interface{}
@@ -65,7 +73,7 @@ func TestAnalyzer_IsGeneric(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewAnalyzer(tt.fn)
+			a := (&AnalyzerImpl{target: tt.fn}).init()
 			if got := a.IsGeneric(); got != tt.want {
 				t.Errorf("IsGeneric() = %v, want %v", got, tt.want)
 			}
@@ -73,7 +81,7 @@ func TestAnalyzer_IsGeneric(t *testing.T) {
 	}
 }
 
-func TestAnalyzer_IsMethod(t *testing.T) {
+func TestAnalyzerImpl_IsMethod(t *testing.T) {
 	tests := []struct {
 		name string
 		fn   interface{}
@@ -111,8 +119,8 @@ func TestAnalyzer_IsMethod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewAnalyzer(tt.fn)
-			if got := a.IsMethod(); got != tt.want {
+			a := (&AnalyzerImpl{target: tt.fn}).init()
+			if got := a.method; got != tt.want {
 				t.Errorf("IsMethod() = %v, want %v", got, tt.want)
 			}
 		})

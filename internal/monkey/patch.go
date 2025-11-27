@@ -72,7 +72,7 @@ func PatchValue(target, hook, proxy reflect.Value, unsafe, generic bool) *Patch 
 	// inject the proxy code to the proxy function
 	fn.InjectInto(proxy, proxyCode)
 
-	tool.DebugPrintf("PatchValue: hook code len(%v), cuttingIdx(%v)\n", len(hookCode), cuttingIdx)
+	tool.DebugPrintf("PatchValue: target addr(0x%x), hook code len(%v), cuttingIdx(%v)\n", targetAddr, len(hookCode), cuttingIdx)
 
 	// replace target function codes before the cutting point
 	mem.WriteWithSTW(targetAddr, hookCode)

@@ -36,3 +36,23 @@ func ReflectCall(f reflect.Value, args []reflect.Value) []reflect.Value {
 		return f.Call(args)
 	}
 }
+
+func NewFuncTypeByOut(ft reflect.Type, newOutTypes ...reflect.Type) reflect.Type {
+	var inTypes []reflect.Type
+	for i := 0; i < ft.NumIn(); i++ {
+		inTypes = append(inTypes, ft.In(i))
+	}
+	return reflect.FuncOf(inTypes, newOutTypes, ft.IsVariadic())
+}
+
+func MakeReturnValues(ft reflect.Type, results ...interface{}) []reflect.Value {
+	var retValues []reflect.Value
+	for i, result := range results {
+		retValue := reflect.Zero(ft.Out(i))
+		if result != nil {
+			retValue = reflect.ValueOf(result).Convert(ft.Out(i))
+		}
+		retValues = append(retValues, retValue)
+	}
+	return retValues
+}

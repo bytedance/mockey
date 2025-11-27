@@ -20,11 +20,11 @@ import (
 	"reflect"
 )
 
-type Adapter interface {
-	// Generic returns if the target is generic.
-	Generic() bool
+type Analyzer interface {
+	// TargetType returns the type of the target function or method.
+	TargetType() reflect.Type
 
-	// ExtendedTargetType returns the actual type of the target function at runtime. It contains generic type info if the
+	// RuntimeTargetType returns the actual type of the target function at runtime. It contains generic type info if the
 	// target is generic:
 	//  1. function:
 	//     a. non-generic function: func(inArgs) outArgs
@@ -34,9 +34,12 @@ type Adapter interface {
 	//     b. generic method:
 	//     - BEFORE go1.20: func(GenericInfo, self *struct, inArgs) outArgs
 	//     - AFTER go1.20: func(self *struct, GenericInfo, inArgs) outArgs
-	ExtendedTargetType() reflect.Type
+	RuntimeTargetType() reflect.Type
 
-	// InputAdapter generates an adapter function to adapt the input arguments of the ExtendedTargetType() to the inputType.
+	// IsGeneric returns true if the target is a generic function or method.
+	IsGeneric() bool
+
+	// InputAdapter generates an adapter function to adapt the input arguments of the RuntimeTargetType() to the inputType.
 	// These inputTypes are valid:
 	//  1. function:
 	//     a. non-generic function: func(inArgs) outArgs
@@ -46,7 +49,7 @@ type Adapter interface {
 	//     b. generic method: func(GenericInfo, self *struct, inArgs) outArgs OR func(self *struct, inArgs) outArgs OR func(inArgs) outArgs
 	InputAdapter(inputName string, inputType reflect.Type) func([]reflect.Value) []reflect.Value
 
-	// ReversedInputAdapter generates an adapter function to adapt the input arguments of the inputType to the ExtendedTargetType().
+	// ReversedInputAdapter generates an adapter function to adapt the input arguments of the inputType to the RuntimeTargetType().
 	// These inputTypes are valid:
 	//  1. function:
 	//     a. non-generic function: func(inArgs) outArgs
@@ -55,7 +58,4 @@ type Adapter interface {
 	//     a. non-generic method: func(self *struct, inArgs) outArgs OR func(inArgs) outArgs
 	//     b. generic method: func(GenericInfo, self *struct, inArgs) outArgs OR func(self *struct, inArgs) outArgs OR func(inArgs) outArgs
 	ReversedInputAdapter(inputName string, inputType reflect.Type) func(inputArgs, extraArgs []reflect.Value) []reflect.Value
-
-	// CheckReturnArgs checks if the return arguments of the inputType are valid. It should be consistent with the ExtendedTargetType().
-	CheckReturnArgs(inputName string, inputType reflect.Type)
 }

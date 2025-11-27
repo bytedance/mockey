@@ -16,12 +16,10 @@
 
 package mockey
 
-// make sure private
-
-type Private interface {
+type private interface {
 	private()
 }
 
-type MockeyPrivate struct{}
+type Private struct{}
 
-func (*MockeyPrivate) private() {}
+func (*Private) private() {}
