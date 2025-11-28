@@ -45,6 +45,43 @@ func NewFuncTypeByOut(ft reflect.Type, newOutTypes ...reflect.Type) reflect.Type
 	return reflect.FuncOf(inTypes, newOutTypes, ft.IsVariadic())
 }
 
+func NewFuncTypeByInsertIn(ft reflect.Type, newInTypes ...reflect.Type) reflect.Type {
+	inTypes := newInTypes
+	for i := 0; i < ft.NumIn(); i++ {
+		inTypes = append(inTypes, ft.In(i))
+	}
+	outTypes := make([]reflect.Type, ft.NumOut())
+	for i := range outTypes {
+		outTypes[i] = ft.Out(i)
+	}
+	return reflect.FuncOf(inTypes, outTypes, ft.IsVariadic())
+}
+
+func MakeEmptyInArgs(ft reflect.Type) []reflect.Value {
+	args := make([]reflect.Value, ft.NumIn())
+	for i := range args {
+		args[i] = MakeEmtpy(ft.In(i))
+	}
+	return args
+}
+
+func MakeEmptyOutArgs(ft reflect.Type) []reflect.Value {
+	args := make([]reflect.Value, ft.NumOut())
+	for i := range args {
+		args[i] = MakeEmtpy(ft.Out(i))
+	}
+	return args
+}
+
+func MakeEmtpy(typ reflect.Type) reflect.Value {
+	switch typ.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Chan, reflect.Func:
+		return reflect.New(typ.Elem())
+	default:
+		return reflect.Zero(typ)
+	}
+}
+
 func MakeReturnValues(ft reflect.Type, results ...interface{}) []reflect.Value {
 	var retValues []reflect.Value
 	for i, result := range results {

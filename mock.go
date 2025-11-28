@@ -206,14 +206,14 @@ func (builder *MockBuilder) Build() *Mocker {
 }
 
 func (mocker *Mocker) build() {
+	mocker.target = reflect.ValueOf(mocker.builder.target)
+
 	var (
 		extraArgsGetter func() []reflect.Value
 		originExec      func(args []reflect.Value) []reflect.Value
 		match           []func(args []reflect.Value) bool
 		exec            []func(args []reflect.Value) []reflect.Value
 	)
-
-	mocker.target = reflect.ValueOf(mocker.builder.target)
 
 	mocker.proxy = reflect.New(mocker.builder.runtimeTargetType())
 
@@ -258,6 +258,17 @@ func (mocker *Mocker) build() {
 			extraArgsGetter = func() []reflect.Value { return args }
 		}
 
+		// Check if the currently called generic function instance matches the mocked generic function
+		if analyzer := mocker.builder.analyzer; analyzer.IsGeneric() {
+			genericInfoHook := tool.NewFuncTypeByInsertIn(analyzer.TargetType(), reflect.TypeOf(GenericInfo(0)))
+			genericInfoAdapter := analyzer.InputAdapter("getGenericInfo", genericInfoHook)
+			genericInfo, targetGenericInfo := genericInfoAdapter(args)[0].Interface().(GenericInfo), analyzer.GenericInfo()
+			if genericInfo != targetGenericInfo {
+				tool.DebugPrintf("genericInfo mismatch: genericInfo: %v, targetGenericInfo: %v\n", genericInfo, targetGenericInfo)
+				return originExec(args)
+			}
+		}
+
 		mocker.access()
 		switch mocker.builder.filterGoroutine {
 		case Disable:
@@ -290,7 +301,8 @@ func (mocker *Mocker) Patch() *Mocker {
 	if mocker.isPatched {
 		return mocker
 	}
-	mocker.patch = monkey.PatchValue(mocker.target, mocker.hook, mocker.proxy, mocker.builder.unsafe, mocker.builder.analyzer.IsGeneric())
+	runtimeTarget := mocker.builder.analyzer.RuntimeTargetValue()
+	mocker.patch = monkey.PatchValue(runtimeTarget, mocker.hook, mocker.proxy, mocker.builder.unsafe)
 	mocker.isPatched = true
 	addToGlobal(mocker)
 
@@ -391,11 +403,8 @@ func (mocker *Mocker) MockTimes() int {
 	return int(atomic.LoadInt64(&mocker.mockTimes))
 }
 
-// key returns the unique key of the mocker.
-// - non-generic function: equal to mocker.target.Pointer()
-// - generic function: the real address of the implementation
 func (mocker *Mocker) key() uintptr {
-	return mocker.patch.Base()
+	return mocker.target.Pointer()
 }
 
 func (mocker *Mocker) name() string {

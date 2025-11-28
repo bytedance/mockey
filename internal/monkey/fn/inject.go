@@ -36,13 +36,18 @@ func InjectInto(target reflect.Value, fnCode []byte) {
 	tool.Assert(err == nil, "protect page failed")
 
 	// make a new function to receive the code
-	carrier := reflect.MakeFunc(vt.Elem(), nil)
+	carrier := MakeFunc(vt.Elem(), common.PtrOf(fnCode))
+
+	// set the target with the new made function
+	target.Elem().Set(carrier)
+}
+
+func MakeFunc(typ reflect.Type, addr uintptr) reflect.Value {
+	carrier := reflect.MakeFunc(typ, nil)
 	type function struct {
 		_      uintptr
 		fnAddr *uintptr
 	}
-	*(*function)(unsafe.Pointer(&carrier)).fnAddr = common.PtrOf(fnCode)
-
-	// set the target with the new made function
-	target.Elem().Set(carrier)
+	*(*function)(unsafe.Pointer(&carrier)).fnAddr = addr
+	return carrier
 }

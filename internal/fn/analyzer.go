@@ -18,11 +18,19 @@ package fn
 
 import (
 	"reflect"
+
+	"github.com/bytedance/mockey/internal/monkey"
+	monkeyFn "github.com/bytedance/mockey/internal/monkey/fn"
+	"github.com/bytedance/mockey/internal/monkey/inst"
+	"github.com/bytedance/mockey/internal/tool"
 )
 
 type Analyzer interface {
 	// TargetType returns the type of the target function or method.
 	TargetType() reflect.Type
+
+	// TargetValue returns the value of the target function or method.
+	TargetValue() reflect.Value
 
 	// RuntimeTargetType returns the actual type of the target function at runtime. It contains generic type info if the
 	// target is generic:
@@ -36,8 +44,15 @@ type Analyzer interface {
 	//     - AFTER go1.20: func(self *struct, GenericInfo, inArgs) outArgs
 	RuntimeTargetType() reflect.Type
 
+	// RuntimeTargetValue returns the actual value of the target function or method. If the target is generic, the returned
+	// value is the gcshape function. Otherwise, it is the same as the target.
+	RuntimeTargetValue() reflect.Value
+
 	// IsGeneric returns true if the target is a generic function or method.
 	IsGeneric() bool
+
+	// GenericInfo returns the type info of the generic target.
+	GenericInfo() GenericInfo
 
 	// InputAdapter generates an adapter function to adapt the input arguments of the RuntimeTargetType() to the inputType.
 	// These inputTypes are valid:
@@ -58,4 +73,63 @@ type Analyzer interface {
 	//     a. non-generic method: func(self *struct, inArgs) outArgs OR func(inArgs) outArgs
 	//     b. generic method: func(GenericInfo, self *struct, inArgs) outArgs OR func(self *struct, inArgs) outArgs OR func(inArgs) outArgs
 	ReversedInputAdapter(inputName string, inputType reflect.Type) func(inputArgs, extraArgs []reflect.Value) []reflect.Value
+}
+
+func (a *AnalyzerImpl) TargetValue() reflect.Value {
+	return a.targetValue
+}
+
+func (a *AnalyzerImpl) TargetType() reflect.Type {
+	return a.targetType
+}
+
+func (a *AnalyzerImpl) RuntimeTargetType() reflect.Type {
+	return a.runtimeTargetType
+}
+
+func (a *AnalyzerImpl) RuntimeTargetValue() reflect.Value {
+	return a.runtimeTargetValue
+}
+
+func (a *AnalyzerImpl) IsGeneric() bool {
+	return a.generic
+}
+
+func (a *AnalyzerImpl) GenericInfo() GenericInfo {
+	return a.runtimeGenericInfo
+}
+
+// runtimeTargetValueAndGenericInfo0 obtains the runtime value of the target and the generic information.
+func (a *AnalyzerImpl) runtimeTargetValueAndGenericInfo0() (reflect.Value, GenericInfo) {
+	if !a.IsGeneric() {
+		return a.targetValue, 0
+	}
+	// Obtain the jump address and generic information address of the generic function through instruction analysis
+	jumpAddr, genericInfoAddr := inst.GetGenericAddr(a.targetValue.Pointer(), 10000)
+	// Create a function value based on the runtime type and the obtained jump address
+	runtimeTarget, genericInfo := monkeyFn.MakeFunc(a.RuntimeTargetType(), jumpAddr), (GenericInfo)(genericInfoAddr)
+	return runtimeTarget, genericInfo
+}
+
+// fallbackRuntimeGenericInfo0 obtains generic information by means of actual execution, and mock the actual logic
+// before execution to prevent side effects
+func (a *AnalyzerImpl) fallbackRuntimeGenericInfo0() (g GenericInfo) {
+	genericInfoHook := tool.NewFuncTypeByInsertIn(a.TargetType(), genericInfoType)
+	genericInfoAdapter := a.InputAdapter("fallbackGenericInfo", genericInfoHook)
+
+	hook := reflect.MakeFunc(a.RuntimeTargetType(), func(args []reflect.Value) []reflect.Value {
+		g = genericInfoAdapter(args)[0].Interface().(GenericInfo) // extract genericInfo from args
+		return tool.MakeEmptyOutArgs(a.runtimeTargetType)
+	})
+
+	proxy := reflect.New(a.RuntimeTargetType())
+
+	tool.DebugPrintf("[Adapter.init] try get fallback genericInfo\n")
+
+	patch := monkey.PatchValue(a.RuntimeTargetValue(), hook, proxy, false)
+	tool.ReflectCall(a.TargetValue(), tool.MakeEmptyInArgs(a.TargetType()))
+	patch.Unpatch()
+
+	tool.DebugPrintf("[Adapter.init] fallback genericInfo got: 0x%x\n", g)
+	return
 }

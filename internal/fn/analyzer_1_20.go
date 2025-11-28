@@ -39,22 +39,28 @@ type AnalyzerImpl struct {
 	genericIn *bool
 	methodIn  *bool
 
-	targetValue       reflect.Value
-	targetType        reflect.Type
-	nameAnalyzer      *nameAnalyzer
-	generic           bool
-	method            bool // DO NOT use it unless absolutely necessary
-	runtimeTargetType reflect.Type
+	targetValue        reflect.Value
+	targetType         reflect.Type
+	nameAnalyzer       *nameAnalyzer
+	generic            bool
+	method             bool // DO NOT use it unless absolutely necessary
+	runtimeTargetType  reflect.Type
+	runtimeTargetValue reflect.Value
+	runtimeGenericInfo GenericInfo
 }
 
 // init initializes the AnalyzerImpl. If `a.genericIn` or `a.methodIn` is set, it will be used directly, else it will be
 // determined by the nameAnalyzer.
 func (a *AnalyzerImpl) init() *AnalyzerImpl {
-	tool.DebugPrintf("[Analyzer.init] genericIn: %v, methodIn: %v\n", a.genericIn, a.methodIn)
+	tool.DebugPrintf("[Analyzer.init] start analyze, genericIn: %v, methodIn: %v\n", a.genericIn, a.methodIn)
 	a.targetValue, a.targetType = reflect.ValueOf(a.target), reflect.TypeOf(a.target)
 	a.generic, a.method = a.isGeneric0(), a.isMethod0()
 	a.runtimeTargetType = a.runtimeTargetType0()
-	tool.DebugPrintf("[Analyzer.init] generic: %v, method: %v, runtimeTargetType: %v\n", a.generic, a.method, a.runtimeTargetType)
+	a.runtimeTargetValue, a.runtimeGenericInfo = a.runtimeTargetValueAndGenericInfo0()
+	if a.IsGeneric() && a.runtimeGenericInfo == 0 {
+		a.runtimeGenericInfo = a.fallbackRuntimeGenericInfo0()
+	}
+	tool.DebugPrintf("[Analyzer.init] analyze finish, generic: %v, method: %v, runtimeTargetType: %v, runtimeTargetValue: 0x%x, runtimeGenericInfo: 0x%x\n", a.generic, a.method, a.runtimeTargetType, a.runtimeTargetValue.Pointer(), a.runtimeGenericInfo)
 	return a
 }
 
@@ -113,7 +119,7 @@ func (a *AnalyzerImpl) isMethod0() bool {
 }
 
 func (a *AnalyzerImpl) runtimeTargetType0() reflect.Type {
-	if !a.IsGeneric() {
+	if !a.generic {
 		return a.targetType
 	}
 	var (
@@ -137,18 +143,6 @@ func (a *AnalyzerImpl) runtimeTargetType0() reflect.Type {
 		targetOut = append(targetOut, a.targetType.Out(i))
 	}
 	return reflect.FuncOf(targetIn, targetOut, a.targetType.IsVariadic())
-}
-
-func (a *AnalyzerImpl) TargetType() reflect.Type {
-	return a.targetType
-}
-
-func (a *AnalyzerImpl) RuntimeTargetType() reflect.Type {
-	return a.runtimeTargetType
-}
-
-func (a *AnalyzerImpl) IsGeneric() bool {
-	return a.generic
 }
 
 func (a *AnalyzerImpl) InputAdapter(inputName string, inputType reflect.Type) func([]reflect.Value) []reflect.Value {

@@ -19,7 +19,11 @@
 
 package mockey
 
+import "github.com/smartystreets/goconvey/convey"
+
 var (
-	mockGeneric = MockGeneric
-	misjudgeOpt = []optionFn{}
+	mockGeneric    = MockGeneric
+	misjudgeOpt    = []optionFn{}
+	remockResult   = convey.ShouldNotPanic
+	notMatchResult = "MOCKED!"
 )
