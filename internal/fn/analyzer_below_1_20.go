@@ -56,9 +56,6 @@ func (a *AnalyzerImpl) init() *AnalyzerImpl {
 	}
 	a.runtimeTargetType = a.runtimeTargetType0()
 	a.runtimeTargetValue, a.runtimeGenericInfo = a.runtimeTargetValueAndGenericInfo0()
-	if a.IsGeneric() && a.runtimeGenericInfo == 0 {
-		a.runtimeGenericInfo = a.fallbackRuntimeGenericInfo0()
-	}
 	tool.DebugPrintf("[Analyzer.init] analyze finish, generic: %v, runtimeTargetType: %v, runtimeTargetValue: 0x%x, runtimeGenericInfo: 0x%x\n", a.generic, a.runtimeTargetType, a.runtimeTargetValue.Pointer(), a.runtimeGenericInfo)
 	return a
 }

@@ -18,6 +18,7 @@ package fn
 
 import (
 	"reflect"
+	"sync/atomic"
 
 	"github.com/bytedance/mockey/internal/monkey"
 	monkeyFn "github.com/bytedance/mockey/internal/monkey/fn"
@@ -75,6 +76,11 @@ type Analyzer interface {
 	ReversedInputAdapter(inputName string, inputType reflect.Type) func(inputArgs, extraArgs []reflect.Value) []reflect.Value
 }
 
+var (
+	genericAnalyzedCount int64
+	genericFallbackCount int64
+)
+
 func (a *AnalyzerImpl) TargetValue() reflect.Value {
 	return a.targetValue
 }
@@ -104,32 +110,32 @@ func (a *AnalyzerImpl) runtimeTargetValueAndGenericInfo0() (reflect.Value, Gener
 	if !a.IsGeneric() {
 		return a.TargetValue(), 0
 	}
+	tool.DebugPrintf("[Analyzer.init] try to analyze generic\n")
+	atomic.AddInt64(&genericAnalyzedCount, 1)
 	// Obtain the jump address and generic information address of the generic function through instruction analysis
 	jumpAddr, genericInfoAddr := inst.GetGenericAddr(a.TargetValue().Pointer(), 10000)
 	// Create a function value based on the runtime type and the obtained jump address
 	runtimeTarget, genericInfo := monkeyFn.MakeFunc(a.RuntimeTargetType(), jumpAddr), (GenericInfo)(genericInfoAddr)
+
+	// Fallback genericInfo: obtains generic information by means of actual execution
+	if genericInfo == 0 {
+		tool.DebugPrintf("[Analyzer.init] fallback genericInfo\n")
+		atomic.AddInt64(&genericFallbackCount, 1)
+
+		genericInfoHook := tool.NewFuncTypeByInsertIn(a.TargetType(), genericInfoType)
+		genericInfoAdapter := a.InputAdapter("fallbackGenericInfo", genericInfoHook)
+
+		hook := reflect.MakeFunc(a.RuntimeTargetType(), func(args []reflect.Value) []reflect.Value {
+			genericInfo = genericInfoAdapter(args)[0].Interface().(GenericInfo) // extract genericInfo from args
+			return tool.MakeEmptyOutArgs(a.TargetType())
+		})
+
+		proxy := reflect.New(a.RuntimeTargetType())
+
+		patch := monkey.PatchValue(runtimeTarget, hook, proxy, true)
+		tool.ReflectCall(a.TargetValue(), tool.MakeEmptyInArgs(a.TargetType()))
+		patch.Unpatch()
+	}
+	tool.DebugPrintf("[Analyzer.init] analyze generic finish, fallback statistics: %d/%d\n", genericFallbackCount, genericAnalyzedCount)
 	return runtimeTarget, genericInfo
-}
-
-// fallbackRuntimeGenericInfo0 obtains generic information by means of actual execution, and mock the actual logic
-// before execution to prevent side effects
-func (a *AnalyzerImpl) fallbackRuntimeGenericInfo0() (g GenericInfo) {
-	genericInfoHook := tool.NewFuncTypeByInsertIn(a.TargetType(), genericInfoType)
-	genericInfoAdapter := a.InputAdapter("fallbackGenericInfo", genericInfoHook)
-
-	hook := reflect.MakeFunc(a.RuntimeTargetType(), func(args []reflect.Value) []reflect.Value {
-		g = genericInfoAdapter(args)[0].Interface().(GenericInfo) // extract genericInfo from args
-		return tool.MakeEmptyOutArgs(a.TargetType())
-	})
-
-	proxy := reflect.New(a.RuntimeTargetType())
-
-	tool.DebugPrintf("[Analyzer.init] try get fallback genericInfo\n")
-
-	patch := monkey.PatchValue(a.RuntimeTargetValue(), hook, proxy, true)
-	tool.ReflectCall(a.TargetValue(), tool.MakeEmptyInArgs(a.TargetType()))
-	patch.Unpatch()
-
-	tool.DebugPrintf("[Analyzer.init] fallback genericInfo got: 0x%x\n", g)
-	return
 }
