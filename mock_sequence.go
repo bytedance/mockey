@@ -23,8 +23,8 @@ import (
 )
 
 type SequenceOpt interface {
-	// Private make sure it is mockey private interface
-	Private
+	// private make sure it is mockey private interface
+	private
 	// GetNext is used by mockey, don't use it if you don't know what it does
 	GetNext() []interface{}
 }
@@ -36,11 +36,11 @@ type sequenceOpt interface {
 }
 
 type sequence struct {
-	MockeyPrivate // make sure it does implements mockey SequenceOpt
-	values        []*sequenceValue
-	curV          int // current value
-	curT          int // current value times
-	readLock      sync.Mutex
+	Private  // make sure it does implements mockey SequenceOpt
+	values   []*sequenceValue
+	curV     int // current value
+	curT     int // current value times
+	readLock sync.Mutex
 }
 
 type sequenceValue struct {

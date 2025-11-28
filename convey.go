@@ -50,7 +50,7 @@ func PatchConvey(items ...interface{}) {
 
 func addToGlobal(mocker mockerInstance) {
 	key := mocker.key()
-	tool.DebugPrintf("%v added\n", key)
+	tool.DebugPrintf("[addToGlobal] 0x%x added\n", key)
 	last, ok := gMocker[len(gMocker)-1][key]
 	if ok {
 		tool.Assert(!ok, "re-mock %v, previous mock at: %v", last.name(), last.caller())
@@ -60,7 +60,7 @@ func addToGlobal(mocker mockerInstance) {
 
 func removeFromGlobal(mocker mockerInstance) {
 	key := mocker.key()
-	tool.DebugPrintf("%v removed\n", key)
+	tool.DebugPrintf("[removeFromGlobal] 0x%x removed\n", key)
 	delete(gMocker[len(gMocker)-1], key)
 }
 

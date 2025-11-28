@@ -28,9 +28,8 @@ import (
 	"github.com/bytedance/mockey/internal/tool"
 )
 
-func NewAnalyzer(fn any) *Analyzer {
-	v := reflect.ValueOf(fn)
-	return (&Analyzer{v: v, t: v.Type()}).init()
+func newNameAnalyzer(fv reflect.Value) *nameAnalyzer {
+	return (&nameAnalyzer{fullName: runtime.FuncForPC(fv.Pointer()).Name()}).init()
 }
 
 const (
@@ -46,13 +45,11 @@ var (
 
 // Analyzer analyzes functions and provides the IsGeneric() and IsMethod() methods.
 // NOTE: Misjudgment may occur; for more details, please refer to IsMethod().
-type Analyzer struct {
-	v reflect.Value
-	t reflect.Type
-
+type nameAnalyzer struct {
 	// fullName name from runtime.FuncForPC
 	// e.g. main.Foo[...], github.com/bytedance/mockey.Mock,
 	fullName string
+
 	// pkgName is the package name
 	// e.g. main, github.com/bytedance/mockey
 	pkgName string
@@ -65,9 +62,8 @@ type Analyzer struct {
 	funcName string
 }
 
-func (a *Analyzer) init() *Analyzer {
-	a.fullName = runtime.FuncForPC(a.v.Pointer()).Name()
-	tool.DebugPrintf("[Analyzer.init] fullName: %s\n", a.fullName)
+func (a *nameAnalyzer) init() *nameAnalyzer {
+	tool.DebugPrintf("[nameAnalyzer.init] fullName: %s\n", a.fullName)
 	tool.Assert(a.fullName != "", "function name is empty")
 
 	restPart := strings.ReplaceAll(a.fullName, genericSubstr, "")
@@ -97,64 +93,31 @@ func (a *Analyzer) init() *Analyzer {
 	} else {
 		a.pkgName += restPart
 	}
-	tool.DebugPrintf("[Analyzer.init] pkgName: %s, middleName: %s, funcName: %s\n", a.pkgName, a.middleName, a.funcName)
+	tool.DebugPrintf("[nameAnalyzer.init] pkgName: %s, middleName: %s, funcName: %s\n", a.pkgName, a.middleName, a.funcName)
 	return a
 }
 
-// IsGeneric returns true if the function is a generic function.
-func (a *Analyzer) IsGeneric() bool {
+func (a *nameAnalyzer) isGeneric() bool {
 	return strings.Contains(a.fullName, genericSubstr)
 }
 
-// IsMethod returns true if the function is a method.
-// NOTE: For methods named 'func\d+', misjudgment may occur, and they will not be regarded as methods.
-// ```
-// type foo struct {}
-// func (f *foo) func1() {}
-// ```
-// The fullname of 'f.func1' is 'main.foo.func1' which is regarded as an anonymous function in function 'main.foo'.
-func (a *Analyzer) IsMethod() bool {
-	// A function without an argument or middleName is definitely not a method.
-	if a.t.NumIn() == 0 || a.middleName == "" {
-		return false
-	}
-
-	// If the receiver is a pointer type, it must be a method
-	if a.isPtrReceiver() {
-		return true
-	}
-
-	// For exported functions, it is sufficient to iterate through all methods of the receiver and look for a method
-	// with the same type and pointer.
-	if a.isExported() {
-		recvType := a.t.In(0)
-		for i := 0; i < recvType.NumMethod(); i++ {
-			method := recvType.Method(i)
-			if method.Type == a.t && method.Func.Pointer() == a.v.Pointer() {
-				return true
-			}
-		}
-		return false
-	}
-
-	// For unexported functions, it is highly challenging to determine whether they are methods. We can rule out some
-	// cases and the rest are regarded as methods.
-	return !a.isGlobal() && !a.isAnonymousFormat()
+func (a *nameAnalyzer) hasMiddleName() bool {
+	return a.middleName != ""
 }
 
-func (a *Analyzer) isExported() bool {
+func (a *nameAnalyzer) isExported() bool {
 	firstLetter := a.funcName[0]
 	return firstLetter > 'A' && firstLetter < 'Z'
 }
 
-func (a *Analyzer) isGlobal() bool {
+func (a *nameAnalyzer) isGlobal() bool {
 	return a.middleName == globalSubstr
 }
 
-func (a *Analyzer) isPtrReceiver() bool {
+func (a *nameAnalyzer) isPtrReceiver() bool {
 	return strings.HasPrefix(a.middleName, ptrReceiverSubstr1) && strings.HasSuffix(a.middleName, ptrReceiverSubstr2)
 }
 
-func (a *Analyzer) isAnonymousFormat() bool {
+func (a *nameAnalyzer) isAnonymousFormat() bool {
 	return anonymousNameReg.MatchString(a.funcName)
 }

@@ -25,45 +25,51 @@ import (
 	"github.com/bytedance/mockey/internal/tool"
 )
 
-func NewAdapter(target interface{}, generic *bool, method *bool) Adapter {
-	a := &AdapterImpl{
+func NewAnalyzer(target interface{}, generic *bool, method *bool) Analyzer {
+	a := &AnalyzerImpl{
 		target:    target,
 		genericIn: generic,
 	}
 	return a.init()
 }
 
-type AdapterImpl struct {
+type AnalyzerImpl struct {
 	target    interface{}
 	genericIn *bool
 
-	generic            bool
+	targetValue        reflect.Value
 	targetType         reflect.Type
-	extendedTargetType reflect.Type
+	generic            bool
+	runtimeTargetType  reflect.Type
+	runtimeTargetValue reflect.Value
+	runtimeGenericInfo GenericInfo
 }
 
-func (a *AdapterImpl) init() *AdapterImpl {
+func (a *AnalyzerImpl) init() *AnalyzerImpl {
+	tool.DebugPrintf("[Analyzer.init] start analyze, genericIn: %v\n", a.genericIn)
+	a.targetValue, a.targetType = reflect.ValueOf(a.target), reflect.TypeOf(a.target)
+	tool.DebugPrintf("[Analyzer.init] targetType: %v, targetValue: 0x%x\n", a.targetType, a.targetValue.Pointer())
 	if a.genericIn == nil {
 		a.generic = false
 	} else {
 		a.generic = *a.genericIn
 	}
-	a.targetType = reflect.TypeOf(a.target)
-	a.extendedTargetType = a.extendedTargetType0()
+	a.runtimeTargetType = a.runtimeTargetType0()
+	a.runtimeTargetValue, a.runtimeGenericInfo = a.runtimeTargetValueAndGenericInfo0()
+	tool.DebugPrintf("[Analyzer.init] analyze finish, generic: %v, runtimeTargetType: %v, runtimeTargetValue: 0x%x, runtimeGenericInfo: 0x%x\n", a.generic, a.runtimeTargetType, a.runtimeTargetValue.Pointer(), a.runtimeGenericInfo)
 	return a
 }
 
-func (a *AdapterImpl) extendedTargetType0() reflect.Type {
+func (a *AnalyzerImpl) runtimeTargetType0() reflect.Type {
 	if !a.generic {
 		return a.targetType
 	}
 	var (
 		targetIn, targetOut []reflect.Type
 	)
+	// generic information needs to be inserted at position 0
+	targetIn = []reflect.Type{genericInfoType}
 	for i := 0; i < a.targetType.NumIn(); i++ {
-		if i == 0 { // generic information needs to be inserted at position 0
-			targetIn = append(targetIn, genericInfoType)
-		}
 		targetIn = append(targetIn, a.targetType.In(i))
 	}
 	for i := 0; i < a.targetType.NumOut(); i++ {
@@ -72,18 +78,10 @@ func (a *AdapterImpl) extendedTargetType0() reflect.Type {
 	return reflect.FuncOf(targetIn, targetOut, a.targetType.IsVariadic())
 }
 
-func (a *AdapterImpl) Generic() bool {
-	return a.generic
-}
-
-func (a *AdapterImpl) ExtendedTargetType() reflect.Type {
-	return a.extendedTargetType
-}
-
-func (a *AdapterImpl) InputAdapter(inputName string, inputType reflect.Type) func([]reflect.Value) []reflect.Value {
+func (a *AnalyzerImpl) InputAdapter(inputName string, inputType reflect.Type) func([]reflect.Value) []reflect.Value {
 	tool.Assert(inputType.Kind() == reflect.Func, "'%v' is not a function", inputType.Kind())
-	targetType := a.ExtendedTargetType()
-	tool.Assert(targetType.IsVariadic() == inputType.IsVariadic(), "args not match: target: %v, %s: %v", a.targetType, inputName, inputType)
+	targetType := a.RuntimeTargetType()
+	tool.Assert(targetType.IsVariadic() == inputType.IsVariadic(), "args not match: target: %v, %s: %v", a.TargetType(), inputName, inputType)
 
 	// check:
 	// 1. function:
@@ -109,16 +107,16 @@ func (a *AdapterImpl) InputAdapter(inputName string, inputType reflect.Type) fun
 	// check:
 	// 1. method:
 	//     a. generic method: func(inArgs) outArgs
-	tool.Assert(a.generic, "args not match: target: %v, %s: %v", a.targetType, inputName, inputType)
+	tool.Assert(a.IsGeneric(), "args not match: target: %v, %s: %v", a.TargetType(), inputName, inputType)
 	res := tool.CheckFuncArgs(targetType, inputType, 2, 0)
-	tool.Assert(res, "args not match: target: %v, %s: %v", a.targetType, inputName, inputType)
+	tool.Assert(res, "args not match: target: %v, %s: %v", a.TargetType(), inputName, inputType)
 	return func(targetArgs []reflect.Value) []reflect.Value { return targetArgs[2:] }
 }
 
-func (a *AdapterImpl) ReversedInputAdapter(inputName string, inputType reflect.Type) func(inputArgs, extraArgs []reflect.Value) []reflect.Value {
+func (a *AnalyzerImpl) ReversedInputAdapter(inputName string, inputType reflect.Type) func(inputArgs, extraArgs []reflect.Value) []reflect.Value {
 	tool.Assert(inputType.Kind() == reflect.Func, "'%v' is not a function", inputType.Kind())
-	targetType := a.ExtendedTargetType()
-	tool.Assert(targetType.IsVariadic() == inputType.IsVariadic(), "args not match: target: %v, %s: %v", a.targetType, inputName, inputType)
+	targetType := a.RuntimeTargetType()
+	tool.Assert(targetType.IsVariadic() == inputType.IsVariadic(), "args not match: target: %v, %s: %v", a.TargetType(), inputName, inputType)
 
 	// check:
 	// 1. function:
@@ -146,15 +144,10 @@ func (a *AdapterImpl) ReversedInputAdapter(inputName string, inputType reflect.T
 	// check:
 	// 1. method:
 	//     a. generic method: func(inArgs) outArgs
-	tool.Assert(a.generic, "args not match: target: %v, %s: %v", a.targetType, inputName, inputType)
+	tool.Assert(a.IsGeneric(), "args not match: target: %v, %s: %v", a.TargetType(), inputName, inputType)
 	res := tool.CheckFuncArgs(targetType, inputType, 2, 0)
-	tool.Assert(res, "args not match: target: %v, %s: %v", a.targetType, inputName, inputType)
+	tool.Assert(res, "args not match: target: %v, %s: %v", a.TargetType(), inputName, inputType)
 	return func(inputArgs, extraArgs []reflect.Value) []reflect.Value {
 		return append([]reflect.Value{extraArgs[0], extraArgs[1]}, inputArgs...)
 	}
-}
-
-func (a *AdapterImpl) CheckReturnArgs(inputName string, inputType reflect.Type) {
-	res := tool.CheckFuncReturnArgs(a.targetType, inputType)
-	tool.Assert(res, "return args not match: target: %v, %s: %v", a.targetType, inputName, inputType)
 }

@@ -39,22 +39,15 @@ func (m *mockCondition) SetWhen(when interface{}) {
 }
 
 func (m *mockCondition) SetWhenForce(when interface{}) {
-	wVal := reflect.ValueOf(when)
-	wTyp := wVal.Type()
+	wVal, wTyp := reflect.ValueOf(when), reflect.TypeOf(when)
 	tool.Assert(wTyp.NumOut() == 1, "when func ret value not bool")
-	out1 := wVal.Type().Out(0)
+	out1 := wTyp.Out(0)
 	tool.Assert(out1.Kind() == reflect.Bool, "when func ret value not bool")
 
-	adapter := m.builder.adapter.InputAdapter("when", wTyp)
+	adapter := m.builder.analyzer.InputAdapter("when", wTyp)
+	runtimeWhenType := tool.NewFuncTypeByOut(m.builder.runtimeTargetType(), out1)
 
-	var inTypes []reflect.Type
-	targetType := m.builder.targetType()
-	for i := 0; i < targetType.NumIn(); i++ {
-		inTypes = append(inTypes, targetType.In(i))
-	}
-	whenType := reflect.FuncOf(inTypes, []reflect.Type{out1}, targetType.IsVariadic())
-
-	m.when = reflect.MakeFunc(whenType, func(args []reflect.Value) []reflect.Value {
+	m.when = reflect.MakeFunc(runtimeWhenType, func(args []reflect.Value) []reflect.Value {
 		return tool.ReflectCall(wVal, adapter(args))
 	}).Interface()
 }
@@ -73,19 +66,11 @@ func (m *mockCondition) SetReturnForce(results ...interface{}) {
 		}
 	}
 
-	hookType := m.builder.targetType()
-	m.hook = reflect.MakeFunc(hookType, func(_ []reflect.Value) []reflect.Value {
-		results := getResult()
-		tool.CheckReturnValues(hookType, results...)
-		valueResults := make([]reflect.Value, 0)
-		for i, result := range results {
-			rValue := reflect.Zero(hookType.Out(i))
-			if result != nil {
-				rValue = reflect.ValueOf(result).Convert(hookType.Out(i))
-			}
-			valueResults = append(valueResults, rValue)
-		}
-		return valueResults
+	hookType := m.builder.runtimeTargetType()
+	m.hook = reflect.MakeFunc(hookType, func([]reflect.Value) []reflect.Value {
+		current := getResult()
+		tool.CheckReturnValues(hookType, current...)
+		return tool.MakeReturnValues(hookType, current...)
 	}).Interface()
 }
 
@@ -96,9 +81,9 @@ func (m *mockCondition) SetTo(to interface{}) {
 
 func (m *mockCondition) SetToForce(to interface{}) {
 	toType := reflect.TypeOf(to)
-	m.builder.adapter.CheckReturnArgs("hook", toType)
-	adapter := m.builder.adapter.InputAdapter("hook", toType)
-	m.hook = reflect.MakeFunc(m.builder.targetType(), func(args []reflect.Value) (results []reflect.Value) {
+	tool.CheckFuncReturnValues(m.builder.analyzer.TargetType(), toType)
+	adapter := m.builder.analyzer.InputAdapter("hook", toType)
+	m.hook = reflect.MakeFunc(m.builder.runtimeTargetType(), func(args []reflect.Value) (results []reflect.Value) {
 		return tool.ReflectCall(reflect.ValueOf(to), adapter(args))
 	}).Interface()
 }

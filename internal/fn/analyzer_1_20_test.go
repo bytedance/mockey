@@ -27,7 +27,31 @@ import (
 	"github.com/bytedance/mockey/internal/fn/type4test"
 )
 
-func TestAnalyzer_IsGeneric(t *testing.T) {
+func TestAnalyzerImpl_RuntimeTargetType(t *testing.T) {
+	type fields struct {
+		target interface{}
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   reflect.Type
+	}{
+		{"type4test.Foo[string]", fields{type4test.Foo[string]}, reflect.TypeOf(func(GenericInfo, string) {})},
+		{"type4test.NoArgs[string]}", fields{type4test.NoArgs[string]}, reflect.TypeOf(func(GenericInfo) {})},
+		{"(*type4test.A[string]).Foo", fields{(*type4test.A[string]).Foo}, reflect.TypeOf(func(*type4test.A[string], GenericInfo, int) {})},
+		{"(*type4test.A[string]).NoArgs", fields{(*type4test.A[string]).NoArgs}, reflect.TypeOf(func(*type4test.A[string], GenericInfo) {})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := NewAnalyzer(tt.fields.target, nil, nil)
+			if got := a.RuntimeTargetType(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("RuntimeTargetType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAnalyzerImpl_IsGeneric(t *testing.T) {
 	tests := []struct {
 		name string
 		fn   interface{}
@@ -65,7 +89,7 @@ func TestAnalyzer_IsGeneric(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewAnalyzer(tt.fn)
+			a := (&AnalyzerImpl{target: tt.fn}).init()
 			if got := a.IsGeneric(); got != tt.want {
 				t.Errorf("IsGeneric() = %v, want %v", got, tt.want)
 			}
@@ -73,7 +97,7 @@ func TestAnalyzer_IsGeneric(t *testing.T) {
 	}
 }
 
-func TestAnalyzer_IsMethod(t *testing.T) {
+func TestAnalyzerImpl_IsMethod(t *testing.T) {
 	tests := []struct {
 		name string
 		fn   interface{}
@@ -111,8 +135,8 @@ func TestAnalyzer_IsMethod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := NewAnalyzer(tt.fn)
-			if got := a.IsMethod(); got != tt.want {
+			a := (&AnalyzerImpl{target: tt.fn}).init()
+			if got := a.method; got != tt.want {
 				t.Errorf("IsMethod() = %v, want %v", got, tt.want)
 			}
 		})

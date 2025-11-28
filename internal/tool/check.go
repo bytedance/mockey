@@ -30,16 +30,11 @@ func CheckReturnValues(t reflect.Type, results ...interface{}) {
 	}
 }
 
-func CheckFuncReturnArgs(a, b reflect.Type) bool {
-	if a.NumOut() != b.NumOut() {
-		return false
-	}
+func CheckFuncReturnValues(a, b reflect.Type) {
+	Assert(a.NumOut() == b.NumOut(), "return args not match: target: %v, current: %v", a, b)
 	for indexA, indexB := 0, 0; indexA < a.NumOut(); indexA, indexB = indexA+1, indexB+1 {
-		if a.Out(indexA) != b.Out(indexB) {
-			return false
-		}
+		Assert(a.Out(indexA) == b.Out(indexB), "return args not match: target: %v, current: %v", a, b)
 	}
-	return true
 }
 
 func CheckFuncArgs(a, b reflect.Type, shiftA, shiftB int) bool {
