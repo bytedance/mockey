@@ -102,10 +102,10 @@ func (a *AnalyzerImpl) GenericInfo() GenericInfo {
 // runtimeTargetValueAndGenericInfo0 obtains the runtime value of the target and the generic information.
 func (a *AnalyzerImpl) runtimeTargetValueAndGenericInfo0() (reflect.Value, GenericInfo) {
 	if !a.IsGeneric() {
-		return a.targetValue, 0
+		return a.TargetValue(), 0
 	}
 	// Obtain the jump address and generic information address of the generic function through instruction analysis
-	jumpAddr, genericInfoAddr := inst.GetGenericAddr(a.targetValue.Pointer(), 10000)
+	jumpAddr, genericInfoAddr := inst.GetGenericAddr(a.TargetValue().Pointer(), 10000)
 	// Create a function value based on the runtime type and the obtained jump address
 	runtimeTarget, genericInfo := monkeyFn.MakeFunc(a.RuntimeTargetType(), jumpAddr), (GenericInfo)(genericInfoAddr)
 	return runtimeTarget, genericInfo
@@ -119,17 +119,17 @@ func (a *AnalyzerImpl) fallbackRuntimeGenericInfo0() (g GenericInfo) {
 
 	hook := reflect.MakeFunc(a.RuntimeTargetType(), func(args []reflect.Value) []reflect.Value {
 		g = genericInfoAdapter(args)[0].Interface().(GenericInfo) // extract genericInfo from args
-		return tool.MakeEmptyOutArgs(a.runtimeTargetType)
+		return tool.MakeEmptyOutArgs(a.TargetType())
 	})
 
 	proxy := reflect.New(a.RuntimeTargetType())
 
-	tool.DebugPrintf("[Adapter.init] try get fallback genericInfo\n")
+	tool.DebugPrintf("[Analyzer.init] try get fallback genericInfo\n")
 
-	patch := monkey.PatchValue(a.RuntimeTargetValue(), hook, proxy, false)
+	patch := monkey.PatchValue(a.RuntimeTargetValue(), hook, proxy, true)
 	tool.ReflectCall(a.TargetValue(), tool.MakeEmptyInArgs(a.TargetType()))
 	patch.Unpatch()
 
-	tool.DebugPrintf("[Adapter.init] fallback genericInfo got: 0x%x\n", g)
+	tool.DebugPrintf("[Analyzer.init] fallback genericInfo got: 0x%x\n", g)
 	return
 }

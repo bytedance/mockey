@@ -77,7 +77,7 @@ loop:
 		for i := range inst.Args {
 			args = append(args, inst.Args[i])
 		}
-		tool.DebugPrintf("%d:\t%v\n", pos, inst)
+		tool.DebugPrintf("%d:\t0x%x\t%v\n", pos, addr+uintptr(pos), inst)
 
 		switch inst.Op {
 		case arm64asm.BL:

@@ -17,8 +17,8 @@
 package inst
 
 import (
+	"fmt"
 	"reflect"
-	"unsafe"
 
 	"github.com/bytedance/mockey/internal/monkey/common"
 	"github.com/bytedance/mockey/internal/tool"
@@ -68,52 +68,131 @@ func Disassemble(code []byte, required int, checkLen bool) int {
 	return pos
 }
 
-func GetGenericJumpAddr(addr uintptr, maxScan uint64) uintptr {
-	code := common.BytesOf(addr, int(maxScan))
-	var pos uint64
-	var err error
-	var inst x86asm.Inst
-
-	allAddrs := []uintptr{}
+func GetGenericAddr(addr uintptr, maxScan int) (jumpAddr, genericInfoAddr uintptr) {
+	code := common.BytesOf(addr, maxScan)
+	var (
+		allJumpInsts []*genericJmpInst
+		allInfoInsts []*genericInfoInst
+		pos          int
+	)
+loop:
 	for pos < maxScan {
-		inst, err = x86asm.Decode(code[pos:], 64)
+		inst, err := x86asm.Decode(code[pos:], 64)
 		tool.Assert(err == nil, err)
-
 		args := []interface{}{inst.Op}
 		for i := range inst.Args {
 			args = append(args, inst.Args[i])
 		}
-		tool.DebugPrintf("%v\t%v\t%v\t%v\t%v\n", args...)
+		tool.DebugPrintf("%d:\t0x%x\t%v\n", pos, addr+uintptr(pos), inst)
 
-		if inst.Op == x86asm.RET {
-			break
+		switch inst.Op {
+		case x86asm.CALL:
+			allJumpInsts = append(allJumpInsts, newGenericJmpInst(addr, pos, inst))
+		case x86asm.LEA:
+			allInfoInsts = append(allInfoInsts, newGenericInfoInst(addr, pos, inst))
+		case x86asm.RET:
+			break loop
 		}
-
-		if inst.Op == x86asm.CALL {
-			rel := int32(inst.Args[0].(x86asm.Rel))
-			fnAddr := calcAddr(uintptr(unsafe.Pointer(&code[0]))+uintptr(pos+uint64(inst.Len)), rel)
-			isExtraCall, extraName := isGenericProxyCallExtra(fnAddr)
-			tool.DebugPrintf("found CALL, raw is: %v, rel: %x, fnAddr: %x, isExtraCall: %v, extraName: %v\n", inst.String(), rel, fnAddr, isExtraCall, extraName)
-			if !isExtraCall {
-				allAddrs = append(allAddrs, fnAddr)
-			}
-		}
-		pos += uint64(inst.Len)
+		pos += inst.Len
 	}
-	tool.Assert(len(allAddrs) == 1, "invalid callAddr: %v", allAddrs)
-	return allAddrs[0]
+
+	var (
+		jumpInst *genericJmpInst
+		infoInst *genericInfoInst
+	)
+	// Find the only jumpInst and filter the extra call
+	for _, cur := range allJumpInsts {
+		if cur.isExtraCall {
+			continue
+		}
+		tool.Assert(jumpInst == nil, "invalid jumpInsts: %v", allJumpInsts)
+		jumpInst = cur
+	}
+	tool.Assert(jumpInst != nil, "invalid jumpInsts: %v", allJumpInsts)
+	tool.DebugPrintf("jumpInst found: %v\n", jumpInst)
+
+	// Find the exact infoInst before the jumpInst
+	for _, cur := range allInfoInsts {
+		if cur.matchJumpInst(jumpInst) {
+			infoInst = cur
+		}
+	}
+	// In some cases, genericInfoAddr needs to be calculated and cannot be directly obtained by analyzing instructions.
+	if infoInst == nil {
+		tool.DebugPrintf("infoInst not found!\n")
+		return jumpInst.jumpAddr, 0
+	}
+
+	gi := infoInst.calcGenericInfoAddr()
+	tool.DebugPrintf("infoInst found: %v, genericInfoAddr: 0x%x\n", infoInst, gi)
+	return jumpInst.jumpAddr, gi
 }
 
-func calcAddr(from uintptr, rel int32) uintptr {
-	tool.DebugPrintf("calc CALL addr, from: %x(%v) CALL: %x\n", from, from, rel)
+type posInst struct {
+	pos  int
+	addr uintptr
+	inst x86asm.Inst
+}
 
-	var dest uintptr
-	if rel < 0 {
-		dest = from - uintptr(uint32(-rel))
-	} else {
-		dest = from + uintptr(rel)
+func (pi *posInst) String() string {
+	return fmt.Sprintf("{pos: %d, addr: 0x%x, inst: %v}", pi.pos, pi.addr, pi.inst)
+}
+
+func newGenericJmpInst(base uintptr, pos int, inst x86asm.Inst) *genericJmpInst {
+	ji := &genericJmpInst{
+		posInst: &posInst{pos: pos, addr: base + uintptr(pos), inst: inst},
 	}
+	return ji.init()
+}
 
-	tool.DebugPrintf("L->H: %v, rel: %v, from: %x(%v), dest: %x(%v), distance: %v\n", rel > 0, rel, from, from, dest, dest, from-dest)
-	return dest
+type genericJmpInst struct {
+	*posInst
+	jumpAddr      uintptr
+	isExtraCall   bool
+	extraCallName string
+}
+
+func (g *genericJmpInst) String() string {
+	return fmt.Sprintf("{posInst: %v, jumpAddr: 0x%x, isExtraCall: %v, extraCallName: %v}", g.posInst, g.jumpAddr, g.isExtraCall, g.extraCallName)
+}
+
+func (g *genericJmpInst) init() *genericJmpInst {
+	g.jumpAddr = g.calcJumpAddr()
+	g.isExtraCall, g.extraCallName = isGenericProxyCallExtra(g.jumpAddr)
+	return g
+}
+
+func (g *genericJmpInst) calcJumpAddr() uintptr {
+	return g.addr + uintptr(g.inst.Len) + uintptr(g.inst.Args[0].(x86asm.Rel))
+}
+
+func newGenericInfoInst(base uintptr, pos int, inst x86asm.Inst) *genericInfoInst {
+	return &genericInfoInst{
+		lea: &posInst{pos: pos, addr: base + uintptr(pos), inst: inst},
+	}
+}
+
+type genericInfoInst struct {
+	lea *posInst
+}
+
+func (g *genericInfoInst) String() string {
+	return fmt.Sprintf("{lea: %v}", g.lea)
+}
+
+func (g *genericInfoInst) matchJumpInst(jumpInst *genericJmpInst) bool {
+	mem, ok := g.lea.inst.Args[1].(x86asm.Mem)
+	if !ok {
+		return false
+	}
+	if mem.Base != x86asm.RIP {
+		return false
+	}
+	return g.lea.pos+g.lea.inst.Len <= jumpInst.pos
+}
+
+// calcGenericInfoAddr calculates the genericInfo from the lea instructions. Example:
+// LEA RBX, [RIP+0x145d07]
+func (g *genericInfoInst) calcGenericInfoAddr() uintptr {
+	return g.lea.addr + uintptr(g.lea.inst.Len) + uintptr(g.lea.inst.Args[1].(x86asm.Mem).Disp)
 }
