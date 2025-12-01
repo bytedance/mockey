@@ -54,6 +54,7 @@ type AnalyzerImpl struct {
 func (a *AnalyzerImpl) init() *AnalyzerImpl {
 	tool.DebugPrintf("[Analyzer.init] start analyze, genericIn: %v, methodIn: %v\n", a.genericIn, a.methodIn)
 	a.targetValue, a.targetType = reflect.ValueOf(a.target), reflect.TypeOf(a.target)
+	tool.DebugPrintf("[Analyzer.init] targetType: %v, targetValue: 0x%x\n", a.targetType, a.targetValue.Pointer())
 	a.generic, a.method = a.isGeneric0(), a.isMethod0()
 	a.runtimeTargetType = a.runtimeTargetType0()
 	a.runtimeTargetValue, a.runtimeGenericInfo = a.runtimeTargetValueAndGenericInfo0()
