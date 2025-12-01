@@ -75,7 +75,7 @@ func MakeEmptyOutArgs(ft reflect.Type) []reflect.Value {
 
 func MakeEmtpy(typ reflect.Type) reflect.Value {
 	switch typ.Kind() {
-	case reflect.Ptr, reflect.Interface, reflect.Chan, reflect.Func:
+	case reflect.Ptr:
 		return reflect.New(typ.Elem())
 	default:
 		return reflect.Zero(typ)
