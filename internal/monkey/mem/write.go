@@ -19,6 +19,7 @@ package mem
 import (
 	"github.com/bytedance/mockey/internal/monkey/common"
 	"github.com/bytedance/mockey/internal/monkey/common/runtime_link/stw"
+	"github.com/bytedance/mockey/internal/monkey/sysmon"
 	"github.com/bytedance/mockey/internal/tool"
 )
 
@@ -27,6 +28,11 @@ import (
 func WriteWithSTW(target uintptr, data []byte) {
 	ctx := stw.NewSTWCtx()
 	ctx.StopTheWorld()
+
+	// Suspend the system monitor thread to avoid SIGBUS errors during memory writes
+	// See https://github.com/bytedance/mockey/issues/68 for more details.
+	resumeFn := sysmon.SuspendSysmon()
+	defer resumeFn()
 
 	begin := target
 	end := target + uintptr(len(data))
