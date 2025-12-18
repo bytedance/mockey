@@ -1,5 +1,5 @@
-//go:build go1.21 && !go1.22
-// +build go1.21,!go1.22
+//go:build go1.22 && !go1.23
+// +build go1.22,!go1.23
 
 /*
  * Copyright 2022 ByteDance Inc.
@@ -23,24 +23,25 @@ import (
 	_ "unsafe"
 )
 
-func newSTWCtx() ctx {
-	return &stwCtx{}
+func doStopTheWorld() (resume func()) {
+	w := stopTheWorld(stwForTestResetDebugLog)
+	return func() { startTheWorld(w) }
 }
-
-type stwCtx struct{}
 
 const stwForTestResetDebugLog = 16
 
-func (ctx *stwCtx) StopTheWorld() {
-	stopTheWorld(stwForTestResetDebugLog)
-}
+// stwReason is an enumeration of reasons the world is stopping.
+type stwReason uint8
 
-func (ctx *stwCtx) StartTheWorld() {
-	startTheWorld()
+// worldStop provides context from the stop-the-world required by the
+// start-the-world.
+type worldStop struct {
+	reason stwReason
+	start  int64
 }
 
 //go:linkname stopTheWorld runtime.stopTheWorld
-func stopTheWorld(reason uint8)
+func stopTheWorld(reason stwReason) worldStop
 
 //go:linkname startTheWorld runtime.startTheWorld
-func startTheWorld()
+func startTheWorld(w worldStop)

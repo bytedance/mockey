@@ -17,8 +17,10 @@
 package mem
 
 import (
+	"runtime"
+
 	"github.com/bytedance/mockey/internal/monkey/common"
-	"github.com/bytedance/mockey/internal/monkey/common/runtime_link/stw"
+	"github.com/bytedance/mockey/internal/monkey/stw"
 	"github.com/bytedance/mockey/internal/monkey/sysmon"
 	"github.com/bytedance/mockey/internal/tool"
 )
@@ -26,12 +28,7 @@ import (
 // WriteWithSTW copies data bytes to the target address and replaces the original bytes, during which it will stop the
 // world (only the current goroutine's P is running).
 func WriteWithSTW(target uintptr, data []byte) {
-	ctx := stw.NewSTWCtx()
-	ctx.StopTheWorld()
-
-	// Suspend the system monitor thread to avoid SIGBUS errors during memory writes
-	// See https://github.com/bytedance/mockey/issues/68 for more details.
-	resumeFn := sysmon.SuspendSysmon()
+	resumeFn := suspendRuntime()
 	defer resumeFn()
 
 	begin := target
@@ -50,6 +47,19 @@ func WriteWithSTW(target uintptr, data []byte) {
 		tool.Assert(err == nil, err)
 		break
 	}
+}
 
-	ctx.StartTheWorld()
+func suspendRuntime() (resume func()) {
+	runtime.LockOSThread()
+	stwResume := stw.StopTheWorld()
+	// Suspend the system monitor thread to avoid SIGBUS errors during memory writes
+	// See https://github.com/bytedance/mockey/issues/68 for more details.
+	sysmonResume := sysmon.SuspendSysmon()
+
+	resume = func() {
+		sysmonResume()
+		stwResume()
+		runtime.UnlockOSThread()
+	}
+	return
 }
