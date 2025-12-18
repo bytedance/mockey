@@ -1,3 +1,6 @@
+//go:build go1.21 && !go1.22
+// +build go1.21,!go1.22
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -14,22 +17,21 @@
  * limitations under the License.
  */
 
-package tool
+package stw
 
 import (
-	"unsafe"
+	_ "unsafe"
 )
 
-func GetGoroutineID() int64 {
-	g := getG()
-	offset := getGGoroutineIDOffset()
-	p := (*int64)(unsafe.Pointer(uintptr(g) + offset))
-	return *p
+const stwForTestResetDebugLog = 16
+
+func doStopTheWorld() (resume func()) {
+	stopTheWorld(stwForTestResetDebugLog)
+	return func() { startTheWorld() }
 }
 
-func getG() unsafe.Pointer
+//go:linkname stopTheWorld runtime.stopTheWorld
+func stopTheWorld(reason uint8)
 
-// getGGoroutineIDOffset Get the goroutine ID offset for the current Go version
-func getGGoroutineIDOffset() uintptr {
-	return gGoroutineIDOffset
-}
+//go:linkname startTheWorld runtime.startTheWorld
+func startTheWorld()

@@ -1,5 +1,5 @@
-//go:build !go1.21
-// +build !go1.21
+//go:build go1.16 && !go1.18
+// +build go1.16,!go1.18
 
 /*
  * Copyright 2022 ByteDance Inc.
@@ -17,28 +17,8 @@
  * limitations under the License.
  */
 
-package stw
+package sysmon
 
-import (
-	_ "unsafe"
+const (
+	sysmonLockOffset = 344
 )
-
-func newSTWCtx() ctx {
-	return &stwCtx{}
-}
-
-type stwCtx struct{}
-
-func (ctx *stwCtx) StopTheWorld() {
-	stopTheWorld("mockey")
-}
-
-func (ctx *stwCtx) StartTheWorld() {
-	startTheWorld()
-}
-
-//go:linkname stopTheWorld runtime.stopTheWorld
-func stopTheWorld(reason string)
-
-//go:linkname startTheWorld runtime.startTheWorld
-func startTheWorld()

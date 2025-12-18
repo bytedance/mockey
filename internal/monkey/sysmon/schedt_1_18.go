@@ -1,5 +1,5 @@
-//go:build go1.23 && !mockey_stw
-// +build go1.23,!mockey_stw
+//go:build go1.18 && !go1.20
+// +build go1.18,!go1.20
 
 /*
  * Copyright 2022 ByteDance Inc.
@@ -16,21 +16,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package sysmon
 
-package stw
-
-import (
-	_ "unsafe"
+const (
+	sysmonLockOffset = 304
 )
-
-func newSTWCtx() ctx {
-	return &stwCtx{}
-}
-
-type stwCtx struct{}
-
-func (ctx *stwCtx) StopTheWorld() {
-}
-
-func (ctx *stwCtx) StartTheWorld() {
-}

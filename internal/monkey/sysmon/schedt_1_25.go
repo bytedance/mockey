@@ -1,3 +1,6 @@
+//go:build go1.25 && !go1.26
+// +build go1.25,!go1.26
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -14,22 +17,8 @@
  * limitations under the License.
  */
 
-package tool
+package sysmon
 
-import (
-	"unsafe"
+const (
+	sysmonLockOffset = 336
 )
-
-func GetGoroutineID() int64 {
-	g := getG()
-	offset := getGGoroutineIDOffset()
-	p := (*int64)(unsafe.Pointer(uintptr(g) + offset))
-	return *p
-}
-
-func getG() unsafe.Pointer
-
-// getGGoroutineIDOffset Get the goroutine ID offset for the current Go version
-func getGGoroutineIDOffset() uintptr {
-	return gGoroutineIDOffset
-}

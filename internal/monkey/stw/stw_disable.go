@@ -1,3 +1,6 @@
+//go:build mockey_disable_stw
+// +build mockey_disable_stw
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -16,11 +19,6 @@
 
 package stw
 
-type ctx interface {
-	StopTheWorld()
-	StartTheWorld()
-}
-
-func NewSTWCtx() ctx {
-	return newSTWCtx()
+func StopTheWorld() (resume func()) {
+	return func() {}
 }

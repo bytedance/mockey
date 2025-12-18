@@ -43,6 +43,7 @@ func InjectInto(target reflect.Value, fnCode []byte) {
 }
 
 func MakeFunc(typ reflect.Type, addr uintptr) reflect.Value {
+	tool.Assert(addr > 0, "func pc is zero")
 	carrier := reflect.MakeFunc(typ, nil)
 	type function struct {
 		_      uintptr

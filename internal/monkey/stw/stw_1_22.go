@@ -23,23 +23,12 @@ import (
 	_ "unsafe"
 )
 
-func newSTWCtx() ctx {
-	return &stwCtx{}
-}
-
-type stwCtx struct {
-	w worldStop
+func doStopTheWorld() (resume func()) {
+	w := stopTheWorld(stwForTestResetDebugLog)
+	return func() { startTheWorld(w) }
 }
 
 const stwForTestResetDebugLog = 16
-
-func (ctx *stwCtx) StopTheWorld() {
-	ctx.w = stopTheWorld(stwForTestResetDebugLog)
-}
-
-func (ctx *stwCtx) StartTheWorld() {
-	startTheWorld(ctx.w)
-}
 
 // stwReason is an enumeration of reasons the world is stopping.
 type stwReason uint8

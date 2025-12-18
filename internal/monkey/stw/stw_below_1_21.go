@@ -1,5 +1,5 @@
-//go:build go1.21 && !go1.22
-// +build go1.21,!go1.22
+//go:build !go1.21
+// +build !go1.21
 
 /*
  * Copyright 2022 ByteDance Inc.
@@ -23,24 +23,13 @@ import (
 	_ "unsafe"
 )
 
-func newSTWCtx() ctx {
-	return &stwCtx{}
-}
-
-type stwCtx struct{}
-
-const stwForTestResetDebugLog = 16
-
-func (ctx *stwCtx) StopTheWorld() {
-	stopTheWorld(stwForTestResetDebugLog)
-}
-
-func (ctx *stwCtx) StartTheWorld() {
-	startTheWorld()
+func doStopTheWorld() (resume func()) {
+	stopTheWorld("mockey")
+	return func() { startTheWorld() }
 }
 
 //go:linkname stopTheWorld runtime.stopTheWorld
-func stopTheWorld(reason uint8)
+func stopTheWorld(reason string)
 
 //go:linkname startTheWorld runtime.startTheWorld
 func startTheWorld()

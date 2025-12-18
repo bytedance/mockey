@@ -175,7 +175,7 @@ func main() {
 }
 ```
 
-Additionally, Golang generics share implementation for different types with the same underlying type. For example, in `type MyString string`, `MyString` and `string` share one implementation. Therefore, mocking one type will interfere with the other. To further distinguish, you need to use `GenericInfo` to determine the specific type:
+Additionally, Golang generics share implementation for different types with the same underlying type. For example, in `type MyString string`, `MyString` and `string` share one implementation. Therefore, mocking one type will interfere with the other.
 ```go
 package main
 
@@ -195,6 +195,40 @@ func main() {
 	MockGeneric(FooGeneric[string]).Return("MOCKED!").Build()
 	fmt.Println(FooGeneric("anything"))           // MOCKED!
 	fmt.Println(FooGeneric[MyString]("anything")) // MOCKED! | This is due to interference after mocking the string type
+}
+```
+
+In v1.3.1, this issue was resolved. We now support mocking generic functions/methods with the same gcshape but different actual types. The example above will behave more as expected:
+```go
+package main
+
+import (
+	"fmt"
+
+	. "github.com/bytedance/mockey"
+)
+
+type MyString string
+
+func FooGeneric[T any](t T) T {
+	return t
+}
+
+func main() {
+	mocker1 := MockGeneric(FooGeneric[string]).Return("MOCKED!").Build()
+	fmt.Println(FooGeneric("anything"))           // MOCKED!
+	fmt.Println(FooGeneric[MyString]("anything")) // anything | No longer interferes
+	mocker2 := MockGeneric(FooGeneric[MyString]).Return("MOCKED2!").Build()
+	fmt.Println(FooGeneric("anything"))           // MOCKED!
+	fmt.Println(FooGeneric[MyString]("anything")) // MOCKED2! | No longer interferes
+
+	// Note: If you need to manually release mockers, be sure to follow the "last-in-first-out" order, otherwise unexpected results such as crashes may occur
+	mocker2.UnPatch()
+	fmt.Println(FooGeneric("anything"))           // MOCKED!
+	fmt.Println(FooGeneric[MyString]("anything")) // anything
+	mocker1.UnPatch()
+	fmt.Println(FooGeneric("anything"))           // anything
+	fmt.Println(FooGeneric[MyString]("anything")) // anything
 }
 ```
 
@@ -575,7 +609,7 @@ func main() {
     ```
     Mockey check failed, please add -gcflags="all=-N -l".
     ```
-2. Check if `Build()` was not called, or that neither `Return(xxx)` nor `To(xxx)` was called, resulting in no actual effect. If the target function has no return value, you still need to call the empty `Return()`.
+2. Check if `Build()` was not called, or that neither `Return(xxx)` nor `To(xxx)` was called, resulting in no actual effect. If the target function has no return value, you still need to call the empty `Return()` or use `To` to customize the hook function.
 3. Mock targets do not match exactly, as below:
     ```go
     package main_test
@@ -760,7 +794,7 @@ If you encounter this error when mocking the same generic function with differen
 - If the target and hook function signatures appear identical in the error, check if the import packages in the test code and target function code are consistent
 
 ### Crash "signal SIGBUS: bus error"?
-Mac M series computers (darwin/arm64) have a higher probability of encountering this issue. You can retry multiple times. Currently, there is no elegant solution. Related discussion [here](https://github.com/bytedance/mockey/issues/68).
+Mac M series computers (darwin/arm64) have a higher probability of encountering this issue. You can retry multiple times. In v1.3.3, we fixed this issue (to some extent). Related discussion [here](https://github.com/bytedance/mockey/issues/68).
 ```
 fatal error: unexpected signal during runtime execution
 [signal SIGBUS: bus error code=0x1 addr=0x10509aec0 pc=0x10509aec0]
