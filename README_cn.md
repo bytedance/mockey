@@ -142,7 +142,7 @@ func main() {
 ```
 
 ### 泛型函数/方法
-> 从 mockey v1.3.0 版本开始，`Mock`试验性地加入了自动识别泛型的能力（针对 go1.20+），可以使用`Mock`直接替换`MockGeneric`
+> 从 v1.3.0 版本开始，`Mock`试验性地加入了自动识别泛型的能力（针对 go1.20+），可以使用`Mock`直接替换`MockGeneric`
 
 使用 `MockGeneric` 来 mock 泛型函数/方法：
 ```go
@@ -177,7 +177,7 @@ func main() {
 }
 ```
 
-另外，Golang 泛型对于同底层类型的不同类型，其泛型实现是共用的。比如 `type MyString string` 中 `MyString` 和 `string` 的实现是一套。因此对于其中一种类型的 mock 会干扰另一种类型，进一步区分需要使用 `GenericInfo` 来判断具体类型
+另外，Golang 泛型对于同底层类型的不同类型，其泛型实现是共用的。比如 `type MyString string` 中 `MyString` 和 `string` 的实现是一套。因此对于其中一种类型的 mock 会干扰另一种类型。
 ```go
 package main
 
@@ -197,6 +197,40 @@ func main() {
 	MockGeneric(FooGeneric[string]).Return("MOCKED!").Build()
 	fmt.Println(FooGeneric("anything"))           // MOCKED!
 	fmt.Println(FooGeneric[MyString]("anything")) // MOCKED! | 这里是因为mock了string类型后的相互干扰
+}
+```
+
+在 v1.3.1 版本中上述问题得到了解决，我们支持了 mock 具有相同 gcshape 但实际类型不同的泛型函数/方法，上面的例子的表现会更加符合预期：
+```go
+package main
+
+import (
+	"fmt"
+
+	. "github.com/bytedance/mockey"
+)
+
+type MyString string
+
+func FooGeneric[T any](t T) T {
+	return t
+}
+
+func main() {
+	mocker1 := MockGeneric(FooGeneric[string]).Return("MOCKED!").Build()
+	fmt.Println(FooGeneric("anything"))           // MOCKED!
+	fmt.Println(FooGeneric[MyString]("anything")) // anything | 不再干扰
+	mocker2 := MockGeneric(FooGeneric[MyString]).Return("MOCKED2!").Build()
+	fmt.Println(FooGeneric("anything"))           // MOCKED!
+	fmt.Println(FooGeneric[MyString]("anything")) // MOCKED2! ｜ 不再干扰
+
+	// 注意：如果您需要手动释放 mocker，务必按照「后入先出」的顺序，否则会导致崩溃等非预期的结果
+	mocker2.UnPatch()
+	fmt.Println(FooGeneric("anything"))           // MOCKED!
+	fmt.Println(FooGeneric[MyString]("anything")) // anything
+	mocker1.UnPatch()
+	fmt.Println(FooGeneric("anything"))           // anything
+	fmt.Println(FooGeneric[MyString]("anything")) // anything
 }
 ```
 
@@ -763,7 +797,7 @@ func main() {
 - 如果 target 和 hook 报错中函数签名看起来完全一样，检查单测代码里和目标函数代码里的 import 包是否一致
 
 ### 崩溃 "signal SIGBUS: bus error"？
-Mac M 系列电脑 (darwin/arm64) 有较大的概率碰到该问题，可以多次重试，目前没有比较优雅的解决途径，相关讨论见[此处](https://github.com/bytedance/mockey/issues/68)。
+Mac M 系列电脑 (darwin/arm64) 有较大的概率碰到该问题，可以多次重试。在 v1.3.3 版本中，我们修复了该问题（一定程度上），相关讨论见[此处](https://github.com/bytedance/mockey/issues/68)。
 ```
 fatal error: unexpected signal during runtime execution
 [signal SIGBUS: bus error code=0x1 addr=0x10509aec0 pc=0x10509aec0]
