@@ -1,5 +1,5 @@
-//go:build !go1.23
-// +build !go1.23
+//go:build !mockey_disable_ss && !go1.23
+// +build !mockey_disable_ss,!go1.23
 
 package sysmon
 
