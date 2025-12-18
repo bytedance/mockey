@@ -17,39 +17,19 @@
 package tool
 
 import (
-	"runtime"
-	"strconv"
-	"strings"
 	"unsafe"
 )
 
-// The `goid` field offset in the struct g in the runtime package
-var gGoroutineIDOffset uintptr
-
-func init() {
-	gGoroutineIDOffset = 152 // default offset for Go1.22-
-
-	vcode := strings.Split(strings.TrimPrefix(runtime.Version(), "go"), ".")
-	if vcode[0] != "1" || len(vcode) < 2 {
-		DebugPrintf("invalid go version: %s\n", runtime.Version())
-		return
-	}
-	subv, err := strconv.ParseInt(vcode[1], 10, 64)
-	if err != nil {
-		DebugPrintf("invalid go version: %s\n", runtime.Version())
-		return
-	}
-	if subv >= 23 && subv < 25 { // Go1.23+
-		gGoroutineIDOffset = 160 // Go1.23 introduced the `syscallbp` field before goid
-	} else if subv >= 25 { // Go1.25+
-		gGoroutineIDOffset = 152 // Go1.25 removed the `gobuf.ret` field before goid
-	}
-}
-
 func GetGoroutineID() int64 {
 	g := getG()
-	p := (*int64)(unsafe.Pointer(uintptr(g) + gGoroutineIDOffset))
+	offset := getGGoroutineIDOffset()
+	p := (*int64)(unsafe.Pointer(uintptr(g) + offset))
 	return *p
 }
 
 func getG() unsafe.Pointer
+
+// getGGoroutineIDOffset Get the goroutine ID offset for the current Go version
+func getGGoroutineIDOffset() uintptr {
+	return gGoroutineIDOffset
+}
