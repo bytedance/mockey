@@ -1,5 +1,5 @@
-//go:build go1.23
-// +build go1.23
+//go:build go1.23 && !go1.26
+// +build go1.23,!go1.26
 
 package sysmon
 
