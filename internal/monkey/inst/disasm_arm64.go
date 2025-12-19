@@ -58,8 +58,18 @@ func calcFnAddrRange(name string, fn func()) (uintptr, uintptr) {
 }
 
 func Disassemble(code []byte, required int, checkLen bool) int {
-	tool.Assert(len(code) > required, "function is too short to patch")
-	return required
+	var pos int
+	var err error
+	var inst arm64asm.Inst
+
+	for pos < required {
+		inst, err = arm64asm.Decode(code[pos:])
+		tool.Assert(err == nil || !checkLen, err)
+		tool.DebugPrintf("Disassemble: %3d\t0x%x\t%v\n", pos, common.PtrOf(code)+uintptr(pos), inst)
+		tool.Assert(inst.Op != arm64asm.RET || !checkLen, "function is too short to patch")
+		pos += instLen
+	}
+	return pos
 }
 
 func GetGenericAddr(addr uintptr, maxScan int) (jumpAddr, genericInfoAddr uintptr) {
@@ -77,7 +87,7 @@ loop:
 		for i := range inst.Args {
 			args = append(args, inst.Args[i])
 		}
-		tool.DebugPrintf("%d:\t0x%x\t%v\n", pos, addr+uintptr(pos), inst)
+		tool.DebugPrintf("GetGenericAddr: %3d\t0x%x\t%v\n", pos, addr+uintptr(pos), inst)
 
 		switch inst.Op {
 		case arm64asm.BL:

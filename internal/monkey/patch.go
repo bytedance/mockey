@@ -56,20 +56,17 @@ func PatchValue(target, hook, proxy reflect.Value, unsafe bool) *Patch {
 	targetCodeBuf := common.BytesOf(targetAddr, bufSize)
 	// construct the branch instruction, i.e. jump to the hook function
 	hookCode := inst.BranchInto(common.PtrAt(hook))
-	// search the cutting point of the target code, i.e. the minimum length of full instructions that is longer than the hookCode
-	cuttingIdx := inst.Disassemble(targetCodeBuf, len(hookCode), !unsafe)
-
 	// construct the proxy code
 	proxyCode := common.AllocatePage()
+	tool.DebugPrintf("PatchValue: target addr(0x%x), proxy addr(%p), hook code len(%v)\n", targetAddr, &proxyCode[0], len(hookCode))
+	// search the cutting point of the target code, i.e. the minimum length of full instructions that is longer than the hookCode
+	cuttingIdx := inst.Disassemble(targetCodeBuf, len(hookCode), !unsafe)
 	// save the original code before the cutting point
 	copy(proxyCode, targetCodeBuf[:cuttingIdx])
 	// construct the branch instruction, i.e. jump to the cutting point
 	copy(proxyCode[cuttingIdx:], inst.BranchTo(targetAddr+uintptr(cuttingIdx)))
 	// inject the proxy code to the proxy function
 	fn.InjectInto(proxy, proxyCode)
-
-	tool.DebugPrintf("PatchValue: target addr(0x%x), hook code len(%v), cuttingIdx(%v)\n", targetAddr, len(hookCode), cuttingIdx)
-
 	// replace target function codes before the cutting point
 	mem.WriteWithSTW(targetAddr, hookCode)
 
