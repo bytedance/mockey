@@ -797,7 +797,7 @@ func main() {
 - 如果 target 和 hook 报错中函数签名看起来完全一样，检查单测代码里和目标函数代码里的 import 包是否一致
 
 ### 崩溃 "signal SIGBUS: bus error"？
-Mac M 系列电脑 (darwin/arm64) 有较大的概率碰到该问题，可以多次重试。在 v1.3.3 版本中，我们修复了该问题（一定程度上），相关讨论见[此处](https://github.com/bytedance/mockey/issues/68)。
+Mac M 系列电脑 (darwin/arm64) 有较大的概率碰到该问题，可以多次重试。在 v1.4.0 版本中，我们修复了该问题（一定程度上），相关讨论见[此处](https://github.com/bytedance/mockey/issues/68)。
 ```
 fatal error: unexpected signal during runtime execution
 [signal SIGBUS: bus error code=0x1 addr=0x10509aec0 pc=0x10509aec0]

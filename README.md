@@ -794,7 +794,7 @@ If you encounter this error when mocking the same generic function with differen
 - If the target and hook function signatures appear identical in the error, check if the import packages in the test code and target function code are consistent
 
 ### Crash "signal SIGBUS: bus error"?
-Mac M series computers (darwin/arm64) have a higher probability of encountering this issue. You can retry multiple times. In v1.3.3, we fixed this issue (to some extent). Related discussion [here](https://github.com/bytedance/mockey/issues/68).
+Mac M series computers (darwin/arm64) have a higher probability of encountering this issue. You can retry multiple times. In v1.4.0, we fixed this issue (to some extent). Related discussion [here](https://github.com/bytedance/mockey/issues/68).
 ```
 fatal error: unexpected signal during runtime execution
 [signal SIGBUS: bus error code=0x1 addr=0x10509aec0 pc=0x10509aec0]
