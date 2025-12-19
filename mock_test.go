@@ -19,6 +19,7 @@ package mockey
 import (
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func (c class) func1(hint string) string {
 }
 
 func MultiReturn() (int, int) {
-	return 0, 0
+	return 0, 0 * int(math.Abs(1))
 }
 
 func MultiReturnErr() (int, int, error) {
@@ -349,7 +350,7 @@ type foo struct{ i int }
 
 func (f *foo) Name(i int) string { return fmt.Sprintf("Fn-%v-%v", f.i, i) }
 
-func (f *foo) Foo() int { return f.i }
+func (f *foo) Foo() int { return f.i * int(math.Abs(1)) }
 
 func TestMockOrigin(t *testing.T) {
 	PatchConvey("struct-origin", t, func() {

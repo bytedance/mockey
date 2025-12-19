@@ -18,6 +18,7 @@ package mockey
 
 import (
 	"fmt"
+	"math"
 	"sync"
 	"testing"
 
@@ -26,7 +27,7 @@ import (
 
 func TestSequenceRace(t *testing.T) {
 	PatchConvey("test sequence race", t, func(c convey.C) {
-		fn := func() int { return -1 }
+		fn := func() int { return -1 * int(math.Abs(1)) }
 		mocker := Mock(fn).Return(Sequence(0).Then(1)).Build()
 
 		wg := sync.WaitGroup{}
