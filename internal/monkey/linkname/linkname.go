@@ -1,3 +1,6 @@
+//go:build !go1.26
+// +build !go1.26
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -28,7 +31,14 @@ func FuncPCForName(name string) uintptr {
 	return nameMap[name]
 }
 
-var nameMap = map[string]uintptr{}
+func FuncList() []*runtime.Func {
+	return funcs
+}
+
+var (
+	nameMap = map[string]uintptr{}
+	funcs   = make([]*runtime.Func, 0)
+)
 
 func init() {
 	md := getMainModuleData()
@@ -43,8 +53,9 @@ func init() {
 	funcTabs := *(*[]functab)(unsafe.Pointer(&header))
 	for _, tab := range funcTabs {
 		pc := textStart + uintptr(tab.entryoff)
-		curName := runtime.FuncForPC(pc).Name()
-		nameMap[curName] = pc
+		fun := runtime.FuncForPC(pc)
+		nameMap[fun.Name()] = pc
+		funcs = append(funcs, fun)
 	}
 }
 
