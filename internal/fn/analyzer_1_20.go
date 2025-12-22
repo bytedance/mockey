@@ -41,7 +41,7 @@ type AnalyzerImpl struct {
 
 	targetValue        reflect.Value
 	targetType         reflect.Type
-	nameAnalyzer       *nameAnalyzer
+	nameAnalyzer       *NameAnalyzer
 	generic            bool
 	method             bool // DO NOT use it unless absolutely necessary
 	runtimeTargetType  reflect.Type
@@ -50,7 +50,7 @@ type AnalyzerImpl struct {
 }
 
 // init initializes the AnalyzerImpl. If `a.genericIn` or `a.methodIn` is set, it will be used directly, else it will be
-// determined by the nameAnalyzer.
+// determined by the NameAnalyzer.
 func (a *AnalyzerImpl) init() *AnalyzerImpl {
 	tool.DebugPrintf("[Analyzer.init] start analyze, genericIn: %v, methodIn: %v\n", a.genericIn, a.methodIn)
 	a.targetValue, a.targetType = reflect.ValueOf(a.target), reflect.TypeOf(a.target)
@@ -67,9 +67,9 @@ func (a *AnalyzerImpl) isGeneric0() bool {
 		return *a.genericIn
 	}
 	if a.nameAnalyzer == nil {
-		a.nameAnalyzer = newNameAnalyzer(a.targetValue)
+		a.nameAnalyzer = NewNameAnalyzerByValue(a.targetValue)
 	}
-	return a.nameAnalyzer.isGeneric()
+	return a.nameAnalyzer.IsGeneric()
 }
 
 func (a *AnalyzerImpl) isMethod0() bool {
@@ -77,7 +77,7 @@ func (a *AnalyzerImpl) isMethod0() bool {
 		return *a.methodIn
 	}
 	if a.nameAnalyzer == nil {
-		a.nameAnalyzer = newNameAnalyzer(a.targetValue)
+		a.nameAnalyzer = NewNameAnalyzerByValue(a.targetValue)
 	}
 
 	// Analyze whether the function is a method.
@@ -89,18 +89,18 @@ func (a *AnalyzerImpl) isMethod0() bool {
 	// The fullname of 'f.func1' is 'main.foo.func1' which is regarded as an anonymous function in function 'main.foo'.
 
 	// A function without an argument or middleName is definitely not a method.
-	if a.targetType.NumIn() == 0 || !a.nameAnalyzer.hasMiddleName() {
+	if a.targetType.NumIn() == 0 || !a.nameAnalyzer.HasMiddleName() {
 		return false
 	}
 
 	// If the receiver is a pointer type, it must be a method
-	if a.nameAnalyzer.isPtrReceiver() {
+	if a.nameAnalyzer.IsPtrReceiver() {
 		return true
 	}
 
 	// For exported functions, it is sufficient to iterate through all methods of the receiver and look for a method
 	// with the same type and pointer.
-	if a.nameAnalyzer.isExported() {
+	if a.nameAnalyzer.IsExported() {
 		recvType := a.targetType.In(0)
 		for i := 0; i < recvType.NumMethod(); i++ {
 			method := recvType.Method(i)
@@ -113,7 +113,7 @@ func (a *AnalyzerImpl) isMethod0() bool {
 
 	// For unexported functions, it is highly challenging to determine whether they are methods. We can rule out some
 	// cases and the rest are regarded as methods.
-	return !a.nameAnalyzer.isGlobal() && !a.nameAnalyzer.isAnonymousFormat()
+	return !a.nameAnalyzer.IsGlobal() && !a.nameAnalyzer.IsAnonymousFormat()
 }
 
 func (a *AnalyzerImpl) runtimeTargetType0() reflect.Type {
