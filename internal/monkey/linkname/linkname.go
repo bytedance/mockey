@@ -25,6 +25,12 @@ import (
 )
 
 func FuncPCForName(name string) uintptr {
+	return nameMap[name]
+}
+
+var nameMap = map[string]uintptr{}
+
+func init() {
 	md := getMainModuleData()
 	textStart := *(*uintptr)(unsafe.Pointer(uintptr(md) + uintptr(textOffset)))
 	funcTabStart := *(**functab)(unsafe.Pointer(uintptr(md) + uintptr(funcTabOffset)))
@@ -38,11 +44,8 @@ func FuncPCForName(name string) uintptr {
 	for _, tab := range funcTabs {
 		pc := textStart + uintptr(tab.entryoff)
 		curName := runtime.FuncForPC(pc).Name()
-		if name == curName {
-			return pc
-		}
+		nameMap[curName] = pc
 	}
-	return 0
 }
 
 const (
