@@ -18,8 +18,8 @@ package mockey
 
 import (
 	"reflect"
-	"unsafe"
 
+	"github.com/bytedance/mockey/internal/monkey/fn"
 	"github.com/bytedance/mockey/internal/tool"
 	"github.com/bytedance/mockey/internal/unsafereflect"
 )
@@ -33,12 +33,11 @@ func GetMethod(instance interface{}, methodName string) interface{} {
 		if m, ok := typ.MethodByName(methodName); ok {
 			return m.Func.Interface()
 		}
-		if m, ok := getFieldMethod(instance, methodName); ok {
-			return m
+		if m, ok := getFieldMethod(reflect.Indirect(reflect.ValueOf(instance)), methodName); ok {
+			return m.Interface()
 		}
-		ch0 := methodName[0]
-		if !(ch0 >= 'A' && ch0 <= 'Z') {
-			return unsafeMethodByName(instance, methodName)
+		if m, ok := unexportedMethodByName(reflect.TypeOf(instance), methodName); ok {
+			return m.Interface()
 		}
 	}
 	tool.Assert(false, "can't reflect instance method: %v", methodName)
@@ -58,24 +57,16 @@ func GetMethod(instance interface{}, methodName string) interface{} {
 //
 // getFieldMethod(NewFoo(),"privateField") will return a function object which
 // points to the anonymous function in NewFoo
-func getFieldMethod(instance interface{}, fieldName string) (interface{}, bool) {
-	v := reflect.Indirect(reflect.ValueOf(instance))
+func getFieldMethod(v reflect.Value, fieldName string) (res reflect.Value, ok bool) {
 	if v.Kind() != reflect.Struct {
-		return nil, false
+		return
 	}
 
 	field := v.FieldByName(fieldName)
 	if !field.IsValid() || field.Kind() != reflect.Func {
-		return nil, false
+		return
 	}
-
-	carrier := reflect.MakeFunc(field.Type(), nil)
-	type function struct {
-		_      uintptr
-		fnAddr *uintptr
-	}
-	*(*function)(unsafe.Pointer(&carrier)).fnAddr = field.Pointer()
-	return carrier.Interface(), true
+	return fn.MakeFunc(field.Type(), field.Pointer()), true
 }
 
 // GetPrivateMethod resolve a certain public method from an instance.
@@ -132,42 +123,17 @@ func getNestedMethod(val reflect.Value, methodName string) (reflect.Method, bool
 	return reflect.PtrTo(typ).MethodByName(methodName)
 }
 
-// unsafeMethodByName resolve a method from an instance, include private method.
-//
-// THIS IS UNSAFE FOR LOWER GO VERSION(<1.12)
-//
-// for example:
-//
-//	unsafeMethodByName(&bytes.Buffer{}, "empty")
-//	unsafeMethodByName(sha256.New(), "checkSum")
-func unsafeMethodByName(instance interface{}, methodName string) interface{} {
-	typ, tfn, ok := unsafereflect.MethodByName(instance, methodName)
-	if !ok {
-		tool.Assert(false, "can't reflect instance method: %v", methodName)
-		return nil
+// unexportedMethodByName resolve an unexported method from an instance
+func unexportedMethodByName(instanceType reflect.Type, methodName string) (res reflect.Value, ok bool) {
+	if ch0 := methodName[0]; ch0 >= 'A' && ch0 <= 'Z' {
+		return
 	}
-	if typ == nil {
-		tool.Assert(false, "failed to determine %v's type", methodName)
+	typ, tfn := unsafereflect.MethodByName(instanceType, methodName)
+	if typ == nil || typ.Kind() != reflect.Func {
+		return
 	}
-
-	if typ.Kind() != reflect.Func {
-		tool.Assert(false, "invalid instance method type: %v, %v", methodName, typ.Kind().String())
-		return nil
-	}
-
-	in := []reflect.Type{reflect.TypeOf(instance)}
-	out := []reflect.Type{}
-	for i := 0; i < typ.NumIn(); i++ {
-		in = append(in, typ.In(i))
-	}
-	for i := 0; i < typ.NumOut(); i++ {
-		out = append(out, typ.Out(i))
-	}
-
-	hook := reflect.FuncOf(in, out, typ.IsVariadic())
-	vt := reflect.Zero(hook).Interface()
-	*(*uintptr)(unsafe.Pointer(uintptr(unsafe.Pointer(&vt)) + 8)) = uintptr(tfn)
-	return vt
+	newType := tool.NewFuncTypeByInsertIn(typ, instanceType)
+	return fn.MakeFunc(newType, tfn), true
 }
 
 // GetGoroutineId gets the current goroutine ID

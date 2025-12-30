@@ -397,9 +397,9 @@ func TestGetNested(t *testing.T) {
 
 func TestPrivateMethod(t *testing.T) {
 	PatchConvey("PrivateMethod", t, func() {
-		PatchConvey("unsafeMethodByName", func() {
+		PatchConvey("unexportedMethodByName", func() {
 			PatchConvey("struct method", func() {
-				fn := unsafeMethodByName(&bytes.Buffer{}, "empty")
+				fn := GetMethod(new(bytes.Buffer), "empty")
 				targetType := reflect.TypeOf(func(*bytes.Buffer) bool { return false })
 
 				convey.So(reflect.TypeOf(fn), convey.ShouldEqual, targetType)
@@ -433,7 +433,7 @@ func TestPrivateMethod(t *testing.T) {
 			})
 			PatchConvey("interface method", func() {
 				targetType := reflect.FuncOf([]reflect.Type{reflect.TypeOf(sha256.New())}, []reflect.Type{reflect.TypeOf([sha256.Size]byte{})}, false)
-				fn := unsafeMethodByName(sha256.New(), "checkSum")
+				fn := GetMethod(sha256.New(), "checkSum")
 				convey.So(reflect.TypeOf(fn), convey.ShouldEqual, targetType)
 
 				convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, []byte{227, 176, 196, 66, 152, 252, 28, 20, 154, 251, 244, 200, 153, 111, 185, 36, 39, 174, 65, 228, 100, 155, 147, 76, 164, 149, 153, 27, 120, 82, 184, 85})
