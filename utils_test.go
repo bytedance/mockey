@@ -145,15 +145,19 @@ func (s *testD) BarD() {}
 type Fn func()
 
 type testFuncField struct {
+	*testFuncNestedField
+}
+
+type testFuncNestedField struct {
 	Public  Fn
 	private Fn
 }
 
 func NewTestFuncField() *testFuncField {
-	return &testFuncField{
+	return &testFuncField{&testFuncNestedField{
 		Public:  func() { panic("shouldn't here") },
 		private: func() { panic("shouldn't here") },
-	}
+	}}
 }
 
 func TestGetMethod(t *testing.T) {
@@ -276,8 +280,8 @@ func (*testInnerP) FooNested() {
 	panic("not here p")
 }
 
-func TestGetNested(t *testing.T) {
-	PatchConvey("TestGetNested", t, func() {
+func TestGetMethod_Nested(t *testing.T) {
+	PatchConvey("TestGetMethod_Nested", t, func() {
 		PatchConvey("instance implement", func() {
 			var obj testNested
 			PatchConvey("pointer container", func() {
@@ -395,54 +399,52 @@ func TestGetNested(t *testing.T) {
 	})
 }
 
-func TestPrivateMethod(t *testing.T) {
-	PatchConvey("PrivateMethod", t, func() {
-		PatchConvey("unexportedMethodByName", func() {
-			PatchConvey("struct method", func() {
-				fn := GetMethod(new(bytes.Buffer), "empty")
-				targetType := reflect.TypeOf(func(*bytes.Buffer) bool { return false })
+func TestGetMethod_Unexported(t *testing.T) {
+	PatchConvey("TestGetMethod_Unexported", t, func() {
+		PatchConvey("struct method", func() {
+			fn := GetMethod(new(bytes.Buffer), "empty")
+			targetType := reflect.TypeOf(func(*bytes.Buffer) bool { return false })
 
-				convey.So(reflect.TypeOf(fn), convey.ShouldEqual, targetType)
+			convey.So(reflect.TypeOf(fn), convey.ShouldEqual, targetType)
 
-				buf := bytes.NewBuffer([]byte{1, 2, 3, 4})
-				b, err := buf.ReadByte()
-				convey.So(b, convey.ShouldEqual, 1)
-				convey.So(err, convey.ShouldBeNil)
+			buf := bytes.NewBuffer([]byte{1, 2, 3, 4})
+			b, err := buf.ReadByte()
+			convey.So(b, convey.ShouldEqual, 1)
+			convey.So(err, convey.ShouldBeNil)
 
-				mocker := Mock(fn).Return(true).Build()
-				_, err = buf.ReadByte()
-				convey.So(err, convey.ShouldEqual, io.EOF)
-				convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
-			})
-			PatchConvey("struct method mock", func() {
-				buf := bytes.NewBuffer([]byte{1, 2, 3, 4})
-				b, err := buf.ReadByte()
-				convey.So(b, convey.ShouldEqual, 1)
-				convey.So(err, convey.ShouldBeNil)
+			mocker := Mock(fn).Return(true).Build()
+			_, err = buf.ReadByte()
+			convey.So(err, convey.ShouldEqual, io.EOF)
+			convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
+		})
+		PatchConvey("struct method mock", func() {
+			buf := bytes.NewBuffer([]byte{1, 2, 3, 4})
+			b, err := buf.ReadByte()
+			convey.So(b, convey.ShouldEqual, 1)
+			convey.So(err, convey.ShouldBeNil)
 
-				mocker := Mock(GetMethod(bytes.NewBuffer(nil), "empty")).Return(true).Build()
-				_, err = buf.ReadByte()
-				convey.So(err, convey.ShouldEqual, io.EOF)
-				convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
-			})
+			mocker := Mock(GetMethod(bytes.NewBuffer(nil), "empty")).Return(true).Build()
+			_, err = buf.ReadByte()
+			convey.So(err, convey.ShouldEqual, io.EOF)
+			convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
+		})
 
-			PatchConvey("interface method mock", func() {
-				mocker := Mock(GetMethod(sha256.New(), "checkSum")).Return([sha256.Size]byte{}).Build()
-				convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, make([]byte, 32))
-				convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
-			})
-			PatchConvey("interface method", func() {
-				targetType := reflect.FuncOf([]reflect.Type{reflect.TypeOf(sha256.New())}, []reflect.Type{reflect.TypeOf([sha256.Size]byte{})}, false)
-				fn := GetMethod(sha256.New(), "checkSum")
-				convey.So(reflect.TypeOf(fn), convey.ShouldEqual, targetType)
+		PatchConvey("interface method mock", func() {
+			mocker := Mock(GetMethod(sha256.New(), "checkSum")).Return([sha256.Size]byte{}).Build()
+			convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, make([]byte, 32))
+			convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
+		})
+		PatchConvey("interface method", func() {
+			targetType := reflect.FuncOf([]reflect.Type{reflect.TypeOf(sha256.New())}, []reflect.Type{reflect.TypeOf([sha256.Size]byte{})}, false)
+			fn := GetMethod(sha256.New(), "checkSum")
+			convey.So(reflect.TypeOf(fn), convey.ShouldEqual, targetType)
 
-				convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, []byte{227, 176, 196, 66, 152, 252, 28, 20, 154, 251, 244, 200, 153, 111, 185, 36, 39, 174, 65, 228, 100, 155, 147, 76, 164, 149, 153, 27, 120, 82, 184, 85})
-				mocker := Mock(fn).To(func() [sha256.Size]byte {
-					return [sha256.Size]byte{}
-				}).Build()
-				convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, make([]byte, 32))
-				convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
-			})
+			convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, []byte{227, 176, 196, 66, 152, 252, 28, 20, 154, 251, 244, 200, 153, 111, 185, 36, 39, 174, 65, 228, 100, 155, 147, 76, 164, 149, 153, 27, 120, 82, 184, 85})
+			mocker := Mock(fn).To(func() [sha256.Size]byte {
+				return [sha256.Size]byte{}
+			}).Build()
+			convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, make([]byte, 32))
+			convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
 		})
 	})
 }

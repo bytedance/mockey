@@ -24,24 +24,76 @@ import (
 	"github.com/bytedance/mockey/internal/unsafereflect"
 )
 
-// GetMethod resolve a certain public method from an instance.
-func GetMethod(instance interface{}, methodName string) interface{} {
-	if typ := reflect.TypeOf(instance); typ != nil {
-		if m, ok := getNestedMethod(reflect.ValueOf(instance), methodName); ok {
-			return m.Func.Interface()
-		}
-		if m, ok := typ.MethodByName(methodName); ok {
-			return m.Func.Interface()
-		}
-		if m, ok := getFieldMethod(reflect.Indirect(reflect.ValueOf(instance)), methodName); ok {
-			return m.Interface()
-		}
-		if m, ok := unexportedMethodByName(reflect.TypeOf(instance), methodName); ok {
-			return m.Interface()
-		}
+// GetMethod resolves a method with the specified name from the given instance.
+// Supports finding:
+// - Exported and unexported methods
+// - Methods for value types and pointer types
+// - Methods in nested anonymous fields
+// - Method fields of structs
+// Parameters:
+// - instance: The instance to find the method on
+// - methodName: The name of the method to find
+// Return value:
+// - The interface of the found method, triggers assertion failure if not found
+func GetMethod(instance interface{}, methodName string) (res interface{}) {
+	if m, ok := getMethod(reflect.ValueOf(instance), methodName); ok {
+		return m.Interface()
 	}
 	tool.Assert(false, "can't reflect instance method: %v", methodName)
 	return nil
+}
+
+func getMethod(val reflect.Value, methodName string) (method reflect.Value, ok bool) {
+	if !val.IsValid() {
+		return
+	}
+	typ := val.Type()
+	kind := typ.Kind()
+
+	if kind == reflect.Ptr || kind == reflect.Interface {
+		val = val.Elem()
+		if !val.IsValid() {
+			return
+		}
+		typ = val.Type()
+		kind = typ.Kind()
+	}
+
+	// check nested if it has anonymous fields
+	if kind == reflect.Struct {
+		for i := 0; i < typ.NumField(); i++ {
+			if !typ.Field(i).Anonymous {
+				continue
+			}
+			if m, ok := getMethod(val.Field(i), methodName); ok {
+				tool.DebugPrintf("[GetMethod] found in nested field, type: %v, field: %v\n", typ, typ.Field(i).Name)
+				return m, true
+			}
+		}
+	}
+
+	// check elem type for exported method
+	if m, ok := typ.MethodByName(methodName); ok {
+		return m.Func, true
+	}
+	// check elem type for field method
+	if m, ok := getFieldMethod(val, methodName); ok {
+		return m, true
+	}
+	// check elem type for unexported method
+	if m, ok := unexportedMethodByName(typ, methodName); ok {
+		return m, true
+	}
+
+	// check ptr type for exported or unexported method
+	ptrType := reflect.PtrTo(typ)
+	if m, ok := ptrType.MethodByName(methodName); ok {
+		return m.Func, true
+	}
+	if m, ok := unexportedMethodByName(ptrType, methodName); ok {
+		return m, true
+	}
+	return
 }
 
 // getFieldMethod gets a functional field's value as an instance
