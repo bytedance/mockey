@@ -75,7 +75,7 @@ func TestWin(t *testing.T) {
   - 基础功能
     - 简单/泛型/可变参数函数或方法（值或指针接收器）
     - 支持钩子函数
-    - 支持`PatchConvey`（每个测试用例后自动释放 mock）
+    - 支持`PatchConvey`和`PatchRun`（每个测试用例后自动释放 mock）
     - 提供`GetMethod`处理特殊情况（如未导出类型的导出方法、未导出方法和嵌套结构体中的方法）
   - 高级功能
     - 条件 mock
@@ -295,8 +295,16 @@ func main() {
 }
 ```
 
-### 支持 `PatchConvey`
-推荐使用`PatchConvey`组织测试用例，就像`smartystreets/goconvey`中`Convey`一样。`PatchConvey`会在每个测试用例后自动释放 mock，从而免去`defer`的苦恼，即 mock 的作用域只在`PatchConvey`内部：
+### 支持`PatchConvey`和`PatchRun`
+> 从 v1.4.1 版本开始支持 `PatchRun`
+
+`PatchConvey`和`PatchRun`都是用于管理 mock 生命周期的工具，它们会在测试用例或函数执行完成后自动释放 mock，从而免去`defer`的苦恼。`PatchConvey`和`PatchRun`都支持嵌套使用，每层只会释放自己内部的 mock。
+
+适用场景对比：
+- 当您需要使用 goconvey 框架的断言功能和测试组织能力时，推荐使用`PatchConvey`；嵌套`PatchConvey`的执行顺序和`Convey`一致，请参考 goconvey 相关[文档](https://github.com/smartystreets/goconvey/wiki/Execution-order)
+- 当您不需要 goconvey 集成时，推荐使用更轻量级的`PatchRun`
+
+`PatchConvey`示例如下：
 ```go
 package main_test
 
@@ -312,28 +320,74 @@ func Foo(in string) string {
 }
 
 func TestXXX(t *testing.T) {
-    // mock
-	PatchConvey("mock 1", t, func() {
+	PatchConvey("TestXXX", t, func() {
+		// mock
+		PatchConvey("mock 1", func() {
+			Mock(Foo).Return("MOCKED-1!").Build() // mock
+			res := Foo("anything")                // 调用
+			So(res, ShouldEqual, "MOCKED-1!")     // 断言
+		})
+		// mock 已释放
+		PatchConvey("mock released", func() {
+			res := Foo("anything")               // 调用
+			So(res, ShouldEqual, "ori:anything") // 断言
+		})
+		// 再次 mock
+		PatchConvey("mock 2", func() {
+			Mock(Foo).Return("MOCKED-2!").Build() // mock
+			res := Foo("anything")                // 调用
+			So(res, ShouldEqual, "MOCKED-2!")     // 断言
+		})
+	})
+}
+```
+
+`PatchRun`示例如下：
+```go
+package main_test
+
+import (
+	"testing"
+
+	. "github.com/bytedance/mockey"
+)
+
+func Foo(in string) string {
+	return "ori:" + in
+}
+
+func TestXXX(t *testing.T) {
+	// mock
+	PatchRun(func() {
 		Mock(Foo).Return("MOCKED-1!").Build() // mock
 		res := Foo("anything")                // 调用
-		So(res, ShouldEqual, "MOCKED-1!")     // 断言
+		if res != "MOCKED-1!" {
+			t.Errorf("expected 'MOCKED-1!', got '%s'", res)
+		}
 	})
 
 	// mock 已释放
-	PatchConvey("mock released", t, func() {
-		res := Foo("anything")               // 调用
-		So(res, ShouldEqual, "ori:anything") // 断言
-	})
+	res := Foo("anything") // 调用
+	if res != "ori:anything" {
+		t.Errorf("expected 'ori:anything', got '%s'", res)
+	}
 
 	// 再次 mock
-	PatchConvey("mock 2", t, func() {
+	PatchRun(func() {
 		Mock(Foo).Return("MOCKED-2!").Build() // mock
 		res := Foo("anything")                // 调用
-		So(res, ShouldEqual, "MOCKED-2!")     // 断言
+		if res != "MOCKED-2!" {
+			t.Errorf("expected 'MOCKED-2!', got '%s'", res)
+		}
 	})
-	
-	// 提示：和`Convey`一样，`PatchConvey`可以嵌套使用；每层`PatchConvey`只会释放自己内部的 mock
+
+	// mock 已释放
+	res = Foo("anything") // 调用
+	if res != "ori:anything" {
+		t.Errorf("expected 'ori:anything', got '%s'", res)
+	}
 }
+
 ```
 
 ### 提供 `GetMethod` 处理特殊情况
@@ -666,9 +720,7 @@ func main() {
     ```
 5. 调用先于 mock 执行。请尝试打断点到原函数第一行，如果执行到第一行时堆栈不在单测的 mock 代码后，则是该问题，常见于 `init()` 函数里的初始化代码。如何 mock `init()`中的函数见 [FAQ](#如何-mock-依赖包-init-里的函数)。
 6. 对泛型函数使用了非泛型的 mock。详见[泛型函数/方法](#泛型函数方法)小节。
-
-### 嵌套 PatchConvey 的执行顺序是怎么样的？
-完全和 Convey 一致，请参考 goconvey 相关[文档](https://github.com/smartystreets/goconvey/wiki/Execution-order)。
+7. arm64 架构下偶发的 mock 失效或者无法恢复 mock。请升级到最新版本，详见[#90](https://github.com/bytedance/mockey/issues/90)。
 
 ### 如何 mock interface 类型？
 方法一：使用 `GetMethod` 从实例获取相应方法
@@ -741,6 +793,8 @@ func main() {
 }
 ```
 
+方法三：我们正在考虑实现一个 interface mock 功能，详见[#3](https://github.com/bytedance/mockey/issues/3)
+
 ### 如何 mock 依赖包 init() 里的函数？
 经常我们会遇到这个问题：依赖包中存在 init 函数，init 函数在本地或者 CI 环境执行会 panic，导致单元测试会直接失败。这时候我们会希望将 panic 的函数 mock 掉，但是由于 init 函数的执行会早于单元测试，故一般的方法无法成功。
 
@@ -786,7 +840,7 @@ func main() {
 	fmt.Println(Foo())
 }
 ```
-对于一个函数而言，在一个 PatchConvey 中（没有也是一样）只能 mock 一次，请参考 PatchConvey 说明小节来组织您的测试用例。如果确实有多次 mock 的需求，请获取 Mocker 来重新 mock，参考[获取 Mocker](#获取-mocker)
+对于一个函数而言，在一个 PatchConvey 中（没有也是一样）只能 mock 一次，请参考 [PatchConvey](#支持patchconvey和patchrun) 说明小节来组织您的测试用例。如果确实有多次 mock 的需求，请获取 Mocker 来重新 mock，参考[获取 Mocker](#获取-mocker)
 
 如果在 mock 不同类型实参的同一泛型函数时出现这个错误，则可能是不同实参的 gcshape 相同导致的，详见[泛型函数/方法](#泛型函数方法)小节。
 
