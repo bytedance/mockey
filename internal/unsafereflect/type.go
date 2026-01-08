@@ -22,21 +22,28 @@ package unsafereflect
 import (
 	"reflect"
 	"unsafe"
+
+	"github.com/bytedance/mockey/internal/tool"
 )
 
-func MethodByName(target interface{}, name string) (typ reflect.Type, fn unsafe.Pointer, ok bool) {
-	r := reflect.TypeOf(target)
+// MethodByName returns the method with the given name.
+// NOTE: This may fail, depending on whether the relevant function type is ignored during compilation
+func MethodByName(r reflect.Type, name string) (typ reflect.Type, addr uintptr) {
 	rt := (*rtype)((*struct {
 		_    uintptr
 		data unsafe.Pointer
 	})(unsafe.Pointer(&r)).data)
 
 	for _, p := range rt.methods() {
-		if rt.nameOff(p.name).name() == name {
-			return toType(rt.typeOff(p.mtyp)), rt.Method(p), true
+		if curName := rt.nameOff(p.name).name(); curName == name {
+			typ, addr = toType(rt.typeOff(p.mtyp)), uintptr(rt.textOff(p.tfn))
+			if typ == nil {
+				tool.DebugPrintf("[MethodByName] warn nil type, name: %v, method: %+v\n", curName, p)
+			}
+			return typ, addr
 		}
 	}
-	return nil, nil, false
+	return
 }
 
 // copy from src/reflect/type.go
@@ -61,12 +68,6 @@ type rtype struct {
 	gcdata    *byte   // garbage collection data
 	str       nameOff // string form
 	ptrToThis typeOff // type for pointer to this type, may be zero
-}
-
-func (t *rtype) Method(p method) (fn unsafe.Pointer) {
-	tfn := t.textOff(p.tfn)
-	fn = unsafe.Pointer(&tfn)
-	return
 }
 
 const kindMask = (1 << 5) - 1
