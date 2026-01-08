@@ -73,7 +73,7 @@ func TestWin(t *testing.T) {
     - Basic
         - Simple / generic / variadic function or method (value or pointer receiver)
         - Supporting hook function
-        - Supporting `PatchConvey` (automatically release mocks after each test case)
+        - Supporting `PatchConvey` and `PatchRun` (automatically release mocks after each test case)
         - Providing `GetMethod` to handle special cases (e.g., exported method of unexported types, unexported method, and methods in nested structs)
     - Advanced
         - Conditional mocking
@@ -140,7 +140,7 @@ func main() {
 ```
 
 ### Generic function/method
-> Starting from mockey v1.3.0, `Mock` experimentally adds the ability to automatically identify generics (for go1.20+), you can use `Mock` to directly replace `MockGeneric`
+> Starting from v1.3.0, `Mock` experimentally adds the ability to automatically identify generics (for go1.20+), you can use `Mock` to directly replace `MockGeneric`
 
 Use `MockGeneric` to mock generic function/method:
 ```go
@@ -293,8 +293,16 @@ func main() {
 }
 ```
 
-### Supporting `PatchConvey`
-It is recommended to use `PatchConvey` to organize test cases, just like `Goconvey` in `smartystreets/goconvey`. `PatchConvey` will automatically release the mocks after each test case, eliminating the need for `defer`, i.e., the mock scope is only within `PatchConvey`:
+### Supporting `PatchConvey` and `PatchRun`
+> Starting from v1.4.1, `PatchRun` is supported
+
+`PatchConvey` and `PatchRun` are tools for managing mock lifecycles. They automatically release mocks after test cases or functions are executed, eliminating the need for `defer`. Both support nested usage, and each layer only releases its own internal mocks.
+
+Applicable scenarios comparison:
+- When you need to use the assertion features and test organization capabilities of the goconvey framework, it is recommended to use `PatchConvey`; the execution order of nested `PatchConvey` is the same as `Convey`, please refer to the goconvey related [documentation](https://github.com/smartystreets/goconvey/wiki/Execution-order)
+- When you don't need goconvey integration, it is recommended to use the more lightweight `PatchRun`
+
+`PatchConvey` example as follows:
 ```go
 package main_test
 
@@ -310,27 +318,77 @@ func Foo(in string) string {
 }
 
 func TestXXX(t *testing.T) {
-    // mock
-	PatchConvey("mock 1", t, func() {
+	PatchConvey("TestXXX", t, func() {
+		// mock
+		PatchConvey("mock 1", func() {
+			Mock(Foo).Return("MOCKED-1!").Build() // mock
+			res := Foo("anything")                // invoke
+			So(res, ShouldEqual, "MOCKED-1!")     // assert
+		})
+
+		// mock released
+		PatchConvey("mock released", func() {
+			res := Foo("anything")               // invoke
+			So(res, ShouldEqual, "ori:anything") // assert
+		})
+
+		// mock again
+		PatchConvey("mock 2", func() {
+			Mock(Foo).Return("MOCKED-2!").Build() // mock
+			res := Foo("anything")                // invoke
+			So(res, ShouldEqual, "MOCKED-2!")     // assert
+		})
+	})
+
+	// Tips: Like `Convey`, `PatchConvey` can be nested; each layer of `PatchConvey` will only release its own internal mocks
+}
+
+```
+
+`PatchRun` example as follows:
+```go
+package main_test
+
+import (
+	"testing"
+
+	. "github.com/bytedance/mockey"
+)
+
+func Foo(in string) string {
+	return "ori:" + in
+}
+
+func TestXXX(t *testing.T) {
+	// mock
+	PatchRun(func() {
 		Mock(Foo).Return("MOCKED-1!").Build() // mock
-		res := Foo("anything")                // invoke
-		So(res, ShouldEqual, "MOCKED-1!")     // assert
+		res := Foo("anything")                // call
+		if res != "MOCKED-1!" {
+			t.Errorf("expected 'MOCKED-1!', got '%s'", res)
+		}
 	})
 
 	// mock released
-	PatchConvey("mock released", t, func() {
-		res := Foo("anything")               // invoke
-		So(res, ShouldEqual, "ori:anything") // assert
-	})
+	res := Foo("anything") // call
+	if res != "ori:anything" {
+		t.Errorf("expected 'ori:anything', got '%s'", res)
+	}
 
 	// mock again
-	PatchConvey("mock 2", t, func() {
+	PatchRun(func() {
 		Mock(Foo).Return("MOCKED-2!").Build() // mock
-		res := Foo("anything")                // invoke
-		So(res, ShouldEqual, "MOCKED-2!")     // assert
+		res := Foo("anything")                // call
+		if res != "MOCKED-2!" {
+			t.Errorf("expected 'MOCKED-2!', got '%s'", res)
+		}
 	})
-    
-    // Tips: Like `Convey`, `PatchConvey` can be nested; each layer of `PatchConvey` will only release its own internal mocks
+
+	// mock released
+	res = Foo("anything") // call
+	if res != "ori:anything" {
+		t.Errorf("expected 'ori:anything', got '%s'", res)
+	}
 }
 ```
 
@@ -663,9 +721,7 @@ func main() {
     ```
 5. The function call happens before mock execution. Try setting a breakpoint at the first line of the original function. If the execution reaches the first line when the stack is not after the mock code in the unit test, this is the issue. Common in `init()` functions. See [relevant section](#how-to-mock-functions-in-dependency-package-init) for how to mock functions in `init()`.
 6. Using non-generic mock for generic functions. See [Generic function/method](#generic-functionmethod) section for details.
-
-### What is the execution order of nested PatchConvey?
-Completely consistent with Convey, please refer to the goconvey related [documentation](https://github.com/smartystreets/goconvey/wiki/Execution-order).
+7. Occasional mock failures or inability to restore mocks under the arm64 architecture. Please upgrade to the latest version, see [#90](https://github.com/bytedance/mockey/issues/90).
 
 ### How to mock interface types?
 Method 1: Use `GetMethod` to get the corresponding method from the instance
@@ -737,6 +793,7 @@ func main() {
    fmt.Println(NewFoo().Foo("anything")) // MOCKED!
 }
 ```
+Method 3: We are working on a interface mocking feature, see [#3](https://github.com/bytedance/mockey/issues/3)
 
 ### How to mock functions in dependency package init()?
 We often encounter this problem: there is an init function in the dependency package that panics when executed in local or CI environment, causing unit tests to fail directly. We hope to mock the panicking function, but since init functions execute before unit tests, general methods cannot succeed.
@@ -783,7 +840,7 @@ func main() {
 	fmt.Println(Foo())
 }
 ```
-For a function, it can only be mocked once in a PatchConvey (even without PatchConvey). Please refer to [PatchConvey](#supporting-patchconvey) to organize your test cases. If there is such a need, please refer to [Acquire Mocker](#acquire-mocker) to remock.
+For a function, it can only be mocked once in a PatchConvey (even without PatchConvey). Please refer to [PatchConvey](#supporting-patchconvey-and-patchrun) to organize your test cases. If there is such a need, please refer to [Acquire Mocker](#acquire-mocker) to remock.
 
 If you encounter this error when mocking the same generic function with different type arguments, it may be caused by the fact that the gcshape of different arguments is the same. For details, see the [Generic function/method](#generic-functionmethod) section.
 
