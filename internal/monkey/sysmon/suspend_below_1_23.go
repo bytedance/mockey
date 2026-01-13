@@ -24,9 +24,13 @@ import (
 )
 
 func init() {
+	usleep = usleep0
 	lock = lock0
 	unlock = unlock0
 }
+
+//go:linkname usleep0 runtime.usleep
+func usleep0(usec uint32)
 
 //go:linkname lock0 runtime.lock
 func lock0(unsafe.Pointer)

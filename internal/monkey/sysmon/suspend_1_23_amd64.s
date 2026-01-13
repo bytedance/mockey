@@ -17,19 +17,11 @@
  * limitations under the License.
  */
 
-package sysmon
+#include "textflag.h"
 
-import (
-	"reflect"
-	"unsafe"
-
-	"github.com/bytedance/mockey/internal/monkey/fn"
-	"github.com/bytedance/mockey/internal/monkey/linkname"
-)
-
-func init() {
-	lockPC := linkname.FuncPCForName("runtime.lock")
-	lock = fn.MakeFunc(reflect.TypeOf(lock), lockPC).Interface().(func(unsafe.Pointer))
-	unlockPC := linkname.FuncPCForName("runtime.unlock")
-	unlock = fn.MakeFunc(reflect.TypeOf(unlock), unlockPC).Interface().(func(unsafe.Pointer))
-}
+TEXT ·usleepTrampoline(SB),NOSPLIT,$8
+    MOVD    usec+0(FP), DI
+    MOVQ    pc+8(FP), SI
+    MOVD    DI, usec-8(SP)
+    CALL    SI
+    RET

@@ -51,11 +51,10 @@ func getSysmonLockOffset() uintptr {
 	return sysmonLockOffset
 }
 
-//go:linkname usleep runtime.usleep
-func usleep(uint32)
-
 //go:linkname sched runtime.sched
 var sched struct{}
+
+var usleep func(uint32)
 
 var lock func(unsafe.Pointer)
 
