@@ -28,8 +28,16 @@ import (
 )
 
 func init() {
+	usleepPC := linkname.FuncPCForName("runtime.usleep")
+	usleep = func(usec uint32) { usleepTrampoline(usec, usleepPC) }
 	lockPC := linkname.FuncPCForName("runtime.lock")
 	lock = fn.MakeFunc(reflect.TypeOf(lock), lockPC).Interface().(func(unsafe.Pointer))
 	unlockPC := linkname.FuncPCForName("runtime.unlock")
 	unlock = fn.MakeFunc(reflect.TypeOf(unlock), unlockPC).Interface().(func(unsafe.Pointer))
 }
+
+// usleepTrampoline a trampoline for the function `runtime.usleep`. `runtime.usleep` is marked with the special tag
+// `go:cgo_unsafe_args`, whose input parameters are passed via the stack instead of registers. Therefore, directly
+// injecting the program counter value of the target function into other user-defined functions will result in undefined
+// behavior due to argument mismatch.
+func usleepTrampoline(usec uint32, pc uintptr)

@@ -1,5 +1,5 @@
-//go:build !mockey_disable_ss && !go1.23
-// +build !mockey_disable_ss,!go1.23
+//go:build !mockey_disable_ss && go1.23 && !go1.26
+// +build !mockey_disable_ss,go1.23,!go1.26
 
 /*
  * Copyright 2022 ByteDance Inc.
@@ -17,23 +17,11 @@
  * limitations under the License.
  */
 
-package sysmon
+#include "textflag.h"
 
-import (
-	"unsafe"
-)
-
-func init() {
-	usleep = usleep0
-	lock = lock0
-	unlock = unlock0
-}
-
-//go:linkname usleep0 runtime.usleep
-func usleep0(usec uint32)
-
-//go:linkname lock0 runtime.lock
-func lock0(unsafe.Pointer)
-
-//go:linkname unlock0 runtime.unlock
-func unlock0(unsafe.Pointer)
+TEXT ·usleepTrampoline(SB),NOSPLIT,$8
+    MOVW    usec+0(FP), R0
+    MOVD    pc+8(FP), R1
+    MOVW    R0, usec-8(SP)
+    CALL    (R1)
+    RET
