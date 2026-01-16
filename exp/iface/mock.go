@@ -21,6 +21,7 @@ package iface
 
 import (
 	"github.com/bytedance/mockey"
+	"github.com/bytedance/mockey/exp/iface/internal"
 	"github.com/bytedance/mockey/internal/tool"
 )
 
@@ -33,8 +34,9 @@ type MockBuilder struct {
 	builders []*mockey.MockBuilder
 }
 
-func Mock(target interface{}) *MockBuilder {
-	targets := findImplementTargets(target)
+func Mock(target interface{}, opt ...OptionFn) *MockBuilder {
+	opts := resolveOpt(opt...)
+	targets := internal.FindImplementTargets(target, opts.selector)
 	builder := &MockBuilder{}
 	tool.DebugPrintf("[InterfaceMock] start to mock for %d targets...\n", len(targets))
 	for i, t := range targets {

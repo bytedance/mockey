@@ -135,3 +135,13 @@ func (a *NameAnalyzer) IsPtrReceiver() bool {
 func (a *NameAnalyzer) IsAnonymousFormat() bool {
 	return anonymousNameReg.MatchString(a.funcName)
 }
+
+// PkgName returns the package name
+func (a *NameAnalyzer) PkgName() string {
+	return a.pkgName
+}
+
+// MiddleName returns the middle name (type name for methods)
+func (a *NameAnalyzer) MiddleName() string {
+	return a.middleName
+}

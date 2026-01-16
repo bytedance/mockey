@@ -20,12 +20,47 @@
 package iface
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"net"
+	"os"
 	"testing"
 	"unsafe"
 
+	"github.com/bytedance/mockey"
 	. "github.com/smartystreets/goconvey/convey"
 )
+
+func TestMockInterface(t *testing.T) {
+	mockey.PatchConvey("TestMockInterface", t, func() {
+		mockey.PatchConvey("normal", func() {
+			Mock(io.Reader.Read).Return(1, io.EOF).Build()
+
+			reader1 := bytes.NewReader(nil)
+			reader2 := bytes.NewBufferString("")
+			reader3 := new(net.TCPConn)
+			reader4 := new(os.File)
+
+			fmt.Println(io.ReadAll(reader1)) // [0] <nil>
+			fmt.Println(io.ReadAll(reader2)) // [0] <nil>
+			fmt.Println(io.ReadAll(reader3)) // [0] <nil>
+			fmt.Println(io.ReadAll(reader4)) // [0] <nil>
+		})
+
+		mockey.PatchConvey("with selector", func() {
+			Mock(io.Reader.Read, SelectType("Reader")).Return(1, io.EOF).Build()
+
+			reader1 := bytes.NewReader(nil)
+			reader2 := bytes.NewBufferString("")
+
+			fmt.Println(io.ReadAll(reader1)) // [0] <nil>
+			fmt.Println(io.ReadAll(reader2)) // [] <nil>, not mocked
+		})
+
+	})
+
+}
 
 type MyI interface {
 	Foo1(string) string
@@ -325,6 +360,62 @@ func TestMockInterface_When(t *testing.T) {
 			So(i1.Foo1(s2), ShouldEqual, "nothing12")
 			So(mocker.Times(), ShouldEqual, 0)
 			So(mocker.MockTimes(), ShouldEqual, 0)
+		})
+	})
+}
+
+func TestMockInterface_Selector(t *testing.T) {
+	Convey("TestMockInterface_Selector", t, func() {
+		s := "anything"
+		impl1 := &MyIImpl1{inner: "12"}
+		impl2 := MyIImpl2{inner: 1, inner2: 2}
+		impl2p := &impl2
+		impl3 := MyIImpl3{}
+		impl3p := &impl3
+		impl4 := MyIImpl4(12)
+		impl4p := &impl4
+
+		mockey.PatchConvey("type", func() {
+			Mock(MyI.Foo1,
+				SelectType("MyIImpl1", "MyIImpl2", "UNKNOWN"),
+			).Return("MOCKED!").Build()
+
+			So(CallFoo(impl1, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl2, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl2p, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl3, s), ShouldEqual, "anything12")
+			So(CallFoo(impl3p, s), ShouldEqual, "anything12")
+			So(CallFoo(impl4, s), ShouldEqual, "anything12")
+			So(CallFoo(impl4p, s), ShouldEqual, "anything12")
+		})
+
+		mockey.PatchConvey("pkg", func() {
+			Mock(MyI.Foo1,
+				SelectPkg("github.com/bytedance/mockey/exp/iface", "UNKNOWN"),
+			).Return("MOCKED!").Build()
+
+			So(CallFoo(impl1, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl2, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl2p, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl3, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl3p, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl4, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl4p, s), ShouldEqual, "MOCKED!")
+		})
+
+		mockey.PatchConvey("type pkg", func() {
+			Mock(MyI.Foo1,
+				SelectType("MyIImpl1", "MyIImpl2", "UNKNOWN"),
+				SelectPkg("github.com/bytedance/mockey/exp/iface", "UNKNOWN"),
+			).Return("MOCKED!").Build()
+
+			So(CallFoo(impl1, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl2, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl2p, s), ShouldEqual, "MOCKED!")
+			So(CallFoo(impl3, s), ShouldEqual, "anything12")
+			So(CallFoo(impl3p, s), ShouldEqual, "anything12")
+			So(CallFoo(impl4, s), ShouldEqual, "anything12")
+			So(CallFoo(impl4p, s), ShouldEqual, "anything12")
 		})
 	})
 }

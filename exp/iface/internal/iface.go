@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-package iface
+package internal
 
 import (
 	"reflect"
@@ -30,7 +30,7 @@ import (
 	"github.com/bytedance/mockey/internal/tool"
 )
 
-func findImplementTargets(i interface{}) []interface{} {
+func FindImplementTargets(i interface{}, selector Selector) []interface{} {
 	iType := reflect.TypeOf(i)
 	tool.Assert(iType.Kind() == reflect.Func, "'%v' is not a function", iType.Kind())
 	tool.Assert(iType.NumIn() >= 1, "'%v' must have receiver", iType)
@@ -44,6 +44,7 @@ func findImplementTargets(i interface{}) []interface{} {
 
 	var res []interface{}
 	for _, fi := range funcInfoMap[iName] {
+		// Due to the lack of type information, our methods for finding targets are very limited.
 		pc := fi.Func.Entry()
 		// Exclude interface itself
 		if pc == iPC {
@@ -54,7 +55,10 @@ func findImplementTargets(i interface{}) []interface{} {
 		if argSizeWithoutReceiver != iArgSizeWithoutReceiver {
 			continue
 		}
-		// FIXME: cannot determine exactly, try use other information
+		// Exclude function name not match
+		if selector != nil && !selector.Match(fi) {
+			continue
+		}
 		newType := tool.NewFuncTypeByReplaceIn(reflect.TypeOf(i), reflect.TypeOf(unsafe.Pointer(nil)), 0)
 		res = append(res, fn2.MakeFunc(newType, pc).Interface())
 	}
