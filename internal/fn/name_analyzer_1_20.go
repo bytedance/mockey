@@ -28,8 +28,12 @@ import (
 	"github.com/bytedance/mockey/internal/tool"
 )
 
-func newNameAnalyzer(fv reflect.Value) *nameAnalyzer {
-	return (&nameAnalyzer{fullName: runtime.FuncForPC(fv.Pointer()).Name()}).init()
+func NewNameAnalyzerByValue(fv reflect.Value) *NameAnalyzer {
+	return NewNameAnalyzer(runtime.FuncForPC(fv.Pointer()).Name(), true)
+}
+
+func NewNameAnalyzer(fullname string, allowDebugLog bool) *NameAnalyzer {
+	return (&NameAnalyzer{fullName: fullname}).init(allowDebugLog)
 }
 
 const (
@@ -43,9 +47,7 @@ var (
 	anonymousNameReg = regexp.MustCompile(`func\d+(\.\d+)*$`)
 )
 
-// Analyzer analyzes functions and provides the IsGeneric() and IsMethod() methods.
-// NOTE: Misjudgment may occur; for more details, please refer to IsMethod().
-type nameAnalyzer struct {
+type NameAnalyzer struct {
 	// fullName name from runtime.FuncForPC
 	// e.g. main.Foo[...], github.com/bytedance/mockey.Mock,
 	fullName string
@@ -62,8 +64,10 @@ type nameAnalyzer struct {
 	funcName string
 }
 
-func (a *nameAnalyzer) init() *nameAnalyzer {
-	tool.DebugPrintf("[nameAnalyzer.init] fullName: %s\n", a.fullName)
+func (a *NameAnalyzer) init(allowDebugLog bool) *NameAnalyzer {
+	if allowDebugLog {
+		tool.DebugPrintf("[NameAnalyzer.init] fullName: %s\n", a.fullName)
+	}
 	tool.Assert(a.fullName != "", "function name is empty")
 
 	restPart := strings.ReplaceAll(a.fullName, genericSubstr, "")
@@ -75,7 +79,11 @@ func (a *nameAnalyzer) init() *nameAnalyzer {
 	} else {
 		lastDotIdx := strings.LastIndex(restPart, ".")
 		a.funcName = restPart[lastDotIdx+1:]
-		restPart = restPart[:lastDotIdx]
+		if lastDotIdx == -1 {
+			restPart = ""
+		} else {
+			restPart = restPart[:lastDotIdx]
+		}
 	}
 
 	// Extract package name
@@ -93,31 +101,47 @@ func (a *nameAnalyzer) init() *nameAnalyzer {
 	} else {
 		a.pkgName += restPart
 	}
-	tool.DebugPrintf("[nameAnalyzer.init] pkgName: %s, middleName: %s, funcName: %s\n", a.pkgName, a.middleName, a.funcName)
+	if allowDebugLog {
+		tool.DebugPrintf("[NameAnalyzer.init] pkgName: %s, middleName: %s, funcName: %s\n", a.pkgName, a.middleName, a.funcName)
+	}
 	return a
 }
 
-func (a *nameAnalyzer) isGeneric() bool {
+func (a *NameAnalyzer) FuncName() string {
+	return a.funcName
+}
+
+func (a *NameAnalyzer) IsGeneric() bool {
 	return strings.Contains(a.fullName, genericSubstr)
 }
 
-func (a *nameAnalyzer) hasMiddleName() bool {
+func (a *NameAnalyzer) HasMiddleName() bool {
 	return a.middleName != ""
 }
 
-func (a *nameAnalyzer) isExported() bool {
+func (a *NameAnalyzer) IsExported() bool {
 	firstLetter := a.funcName[0]
 	return firstLetter > 'A' && firstLetter < 'Z'
 }
 
-func (a *nameAnalyzer) isGlobal() bool {
+func (a *NameAnalyzer) IsGlobal() bool {
 	return a.middleName == globalSubstr
 }
 
-func (a *nameAnalyzer) isPtrReceiver() bool {
+func (a *NameAnalyzer) IsPtrReceiver() bool {
 	return strings.HasPrefix(a.middleName, ptrReceiverSubstr1) && strings.HasSuffix(a.middleName, ptrReceiverSubstr2)
 }
 
-func (a *nameAnalyzer) isAnonymousFormat() bool {
+func (a *NameAnalyzer) IsAnonymousFormat() bool {
 	return anonymousNameReg.MatchString(a.funcName)
+}
+
+// PkgName returns the package name
+func (a *NameAnalyzer) PkgName() string {
+	return a.pkgName
+}
+
+// MiddleName returns the middle name (type name for methods)
+func (a *NameAnalyzer) MiddleName() string {
+	return a.middleName
 }

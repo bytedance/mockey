@@ -57,6 +57,22 @@ func NewFuncTypeByInsertIn(ft reflect.Type, newInTypes ...reflect.Type) reflect.
 	return reflect.FuncOf(inTypes, outTypes, ft.IsVariadic())
 }
 
+func NewFuncTypeByReplaceIn(ft reflect.Type, newInType reflect.Type, newInIndex int) reflect.Type {
+	inTypes := make([]reflect.Type, ft.NumIn())
+	for i := 0; i < ft.NumIn(); i++ {
+		if i == newInIndex {
+			inTypes[i] = newInType
+		} else {
+			inTypes[i] = ft.In(i)
+		}
+	}
+	outTypes := make([]reflect.Type, ft.NumOut())
+	for i := range outTypes {
+		outTypes[i] = ft.Out(i)
+	}
+	return reflect.FuncOf(inTypes, outTypes, ft.IsVariadic())
+}
+
 func MakeEmptyInArgs(ft reflect.Type) []reflect.Value {
 	args := make([]reflect.Value, ft.NumIn())
 	for i := range args {
