@@ -16,30 +16,30 @@
 
 package mockey
 
-type option struct {
+type mockOption struct {
 	unsafe  bool
 	generic *bool
 	method  *bool
 }
 
-type optionFn func(*option)
+type mockOptionFn func(*mockOption)
 
-func OptUnsafe(o *option) {
+func OptUnsafe(o *mockOption) {
 	o.unsafe = true
 }
 
-func OptGeneric(o *option) {
+func OptGeneric(o *mockOption) {
 	var t = true
 	o.generic = &t
 }
 
-func OptMethod(o *option) {
+func OptMethod(o *mockOption) {
 	var t = true
 	o.method = &t
 }
 
-func resolveOpt(target interface{}, fn ...optionFn) *option {
-	opt := &option{
+func resolveMockOpt(fn ...mockOptionFn) *mockOption {
+	opt := &mockOption{
 		unsafe:  false,
 		generic: nil,
 		method:  nil,

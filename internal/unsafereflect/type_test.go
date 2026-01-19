@@ -28,7 +28,8 @@ func TestMethodByName(t *testing.T) {
 	convey.Convey("MethodByName", t, func() {
 		inst := sha256.New()
 		// private structure private method: *sha256.digest.checkSum
-		typ, fn := MethodByName(reflect.TypeOf(inst), "checkSum")
+		typ, fn, ok := MethodByName(reflect.TypeOf(inst), "checkSum")
+		convey.So(ok, convey.ShouldBeTrue)
 		convey.So(fn, convey.ShouldNotBeZeroValue)
 		convey.So(typ, convey.ShouldEqual, reflect.TypeOf(func() [sha256.Size]byte { return [sha256.Size]byte{} }))
 	})

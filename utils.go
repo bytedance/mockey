@@ -35,15 +35,16 @@ import (
 // - methodName: The name of the method to find
 // Return value:
 // - The interface of the found method, triggers assertion failure if not found
-func GetMethod(instance interface{}, methodName string) (res interface{}) {
-	if m, ok := getMethod(reflect.ValueOf(instance), methodName); ok {
+func GetMethod(instance interface{}, methodName string, opt ...methodOptionFn) (res interface{}) {
+	opts := resolveMethodOpt(opt...)
+	if m, ok := getMethod(reflect.ValueOf(instance), methodName, opts); ok {
 		return m.Interface()
 	}
 	tool.Assert(false, "can't reflect instance method: %v", methodName)
 	return nil
 }
 
-func getMethod(val reflect.Value, methodName string) (method reflect.Value, ok bool) {
+func getMethod(val reflect.Value, methodName string, opts *methodOption) (method reflect.Value, ok bool) {
 	if !val.IsValid() {
 		return
 	}
@@ -65,7 +66,7 @@ func getMethod(val reflect.Value, methodName string) (method reflect.Value, ok b
 			if !typ.Field(i).Anonymous {
 				continue
 			}
-			if m, ok := getMethod(val.Field(i), methodName); ok {
+			if m, ok := getMethod(val.Field(i), methodName, opts); ok {
 				tool.DebugPrintf("[GetMethod] found in nested field, type: %v, field: %v\n", typ, typ.Field(i).Name)
 				return m, true
 			}
@@ -81,7 +82,7 @@ func getMethod(val reflect.Value, methodName string) (method reflect.Value, ok b
 		return m, true
 	}
 	// check elem type for unexported method
-	if m, ok := unexportedMethodByName(typ, methodName); ok {
+	if m, ok := unexportedMethodByName(typ, methodName, opts); ok {
 		return m, true
 	}
 
@@ -90,7 +91,7 @@ func getMethod(val reflect.Value, methodName string) (method reflect.Value, ok b
 	if m, ok := ptrType.MethodByName(methodName); ok {
 		return m.Func, true
 	}
-	if m, ok := unexportedMethodByName(ptrType, methodName); ok {
+	if m, ok := unexportedMethodByName(ptrType, methodName, opts); ok {
 		return m, true
 	}
 	return
@@ -176,13 +177,19 @@ func getNestedMethod(val reflect.Value, methodName string) (reflect.Method, bool
 }
 
 // unexportedMethodByName resolve an unexported method from an instance
-func unexportedMethodByName(instanceType reflect.Type, methodName string) (res reflect.Value, ok bool) {
+func unexportedMethodByName(instanceType reflect.Type, methodName string, opts *methodOption) (res reflect.Value, ok bool) {
 	if ch0 := methodName[0]; ch0 >= 'A' && ch0 <= 'Z' {
 		return
 	}
-	typ, tfn := unsafereflect.MethodByName(instanceType, methodName)
-	if typ == nil || typ.Kind() != reflect.Func {
+	typ, tfn, ok := unsafereflect.MethodByName(instanceType, methodName)
+	if !ok {
 		return
+	}
+	tool.Assert(typ != nil || opts.unexportedTargetType != nil, "failed to determine %v's type, please use `OptUnexportedTargetType` to specify", methodName)
+
+	if opts.unexportedTargetType != nil {
+		tool.DebugPrintf("[GetMethod] force determine unexported type: %v\n", typ)
+		typ = opts.unexportedTargetType
 	}
 	newType := tool.NewFuncTypeByInsertIn(typ, instanceType)
 	return fn.MakeFunc(newType, tfn), true
