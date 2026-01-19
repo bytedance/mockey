@@ -28,7 +28,7 @@ import (
 
 // MethodByName returns the method with the given name.
 // NOTE: This may fail, depending on whether the relevant function type is ignored during compilation
-func MethodByName(r reflect.Type, name string) (typ reflect.Type, addr uintptr) {
+func MethodByName(r reflect.Type, name string) (typ reflect.Type, addr uintptr, ok bool) {
 	rt := (*rtype)((*struct {
 		_    uintptr
 		data unsafe.Pointer
@@ -40,10 +40,10 @@ func MethodByName(r reflect.Type, name string) (typ reflect.Type, addr uintptr) 
 			if typ == nil {
 				tool.DebugPrintf("[MethodByName] warn nil type, name: %v, method: %+v\n", curName, p)
 			}
-			return typ, addr
+			return typ, addr, true
 		}
 	}
-	return
+	return nil, 0, false
 }
 
 // copy from src/reflect/type.go

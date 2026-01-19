@@ -446,5 +446,19 @@ func TestGetMethod_Unexported(t *testing.T) {
 			convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, make([]byte, 32))
 			convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
 		})
+
+		PatchConvey("specify unexported method type", func() {
+			targetType := reflect.FuncOf([]reflect.Type{reflect.TypeOf(sha256.New())}, []reflect.Type{reflect.TypeOf([sha256.Size]byte{})}, false)
+			var funcType func() [32]byte
+			fn := GetMethod(sha256.New(), "checkSum", OptUnexportedTargetType(funcType))
+			convey.So(reflect.TypeOf(fn), convey.ShouldEqual, targetType)
+
+			convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, []byte{227, 176, 196, 66, 152, 252, 28, 20, 154, 251, 244, 200, 153, 111, 185, 36, 39, 174, 65, 228, 100, 155, 147, 76, 164, 149, 153, 27, 120, 82, 184, 85})
+			mocker := Mock(fn).To(func() [sha256.Size]byte {
+				return [sha256.Size]byte{}
+			}).Build()
+			convey.So(sha256.New().Sum([]byte{}), convey.ShouldResemble, make([]byte, 32))
+			convey.So(mocker.MockTimes(), convey.ShouldEqual, 1)
+		})
 	})
 }
