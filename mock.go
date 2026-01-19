@@ -61,10 +61,10 @@ type MockBuilder struct {
 // Mock mocks target function.
 // From go1.20, Mock can automatically judge whether the target is generic or not. Before go1.20, you need to use
 // MockGeneric to mock generic function.
-func Mock(target interface{}, opt ...optionFn) *MockBuilder {
+func Mock(target interface{}, opt ...mockOptionFn) *MockBuilder {
 	tool.AssertFunc(target)
 
-	opts := resolveOpt(target, opt...)
+	opts := resolveMockOpt(opt...)
 
 	builder := &MockBuilder{
 		target:   target,
@@ -77,7 +77,7 @@ func Mock(target interface{}, opt ...optionFn) *MockBuilder {
 
 // MockUnsafe has the full ability of the Mock function and removes some security restrictions. This is an alternative
 // when the Mock function fails. It may cause some unknown problems, so we recommend using Mock under normal conditions.
-func MockUnsafe(target interface{}, opt ...optionFn) *MockBuilder {
+func MockUnsafe(target interface{}, opt ...mockOptionFn) *MockBuilder {
 	return Mock(target, append(opt, OptUnsafe)...)
 }
 

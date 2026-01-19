@@ -20,7 +20,7 @@ import "github.com/bytedance/mockey/internal/fn"
 
 // MockGeneric mocks generic function. Target must be generic method or method of generic types
 // From go1.20, Mock can automatically judge whether the target is generic or not.
-func MockGeneric(target interface{}, opt ...optionFn) *MockBuilder {
+func MockGeneric(target interface{}, opt ...mockOptionFn) *MockBuilder {
 	return Mock(target, append(opt, OptGeneric)...)
 }
 
