@@ -76,7 +76,7 @@ func TestWin(t *testing.T) {
     - 简单/泛型/可变参数函数或方法（值或指针接收器）
     - 支持钩子函数
     - 支持`PatchConvey`和`PatchRun`（每个测试用例后自动释放 mock）
-    - 提供`GetMethod`处理特殊情况（如未导出类型的导出方法、未导出方法和嵌套结构体中的方法）
+    - 提供`GetMethod`处理特殊情况（如未导出类型、未导出方法和嵌套结构体中的方法）
   - 高级功能
     - 条件 mock
     - 序列返回
@@ -420,7 +420,7 @@ func main() {
 }
 ```
 
-mock 未导出类型的导出方法：
+mock 未导出类型的方法：
 ```go
 package main
 
@@ -459,6 +459,27 @@ func main() {
 	buf := bytes.NewBuffer([]byte{1, 2, 3, 4})
 	b, err := buf.ReadByte()
 	fmt.Println(b, err)      // 0 EOF | `ReadByte` 在内部调用 `empty` 方法检查缓冲区是否为空并返回 io.EOF
+}
+```
+注意，Go 编译器有可能对未导出的方法直接抹除其类型信息，此时`GetMethod`将无法获取到该方法。这种情况下可以使用`OptUnexportedTargetType`指定其类型：
+```go
+package main
+
+import (
+	"bytes"
+	"fmt"
+
+	. "github.com/bytedance/mockey"
+)
+
+func main() {
+	var targetType func() bool // `empty`方法的签名（不含receiver）
+	target := GetMethod(new(bytes.Buffer), "empty", OptUnexportedTargetType(targetType))
+	Mock(target).Return(true).Build()
+
+	buf := bytes.NewBuffer([]byte{1, 2, 3, 4})
+	b, err := buf.ReadByte()
+	fmt.Println(b, err) // 0 EOF | `ReadByte` 在内部调用 `empty` 方法检查缓冲区是否为空并返回 io.EOF
 }
 ```
 

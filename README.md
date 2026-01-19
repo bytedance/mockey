@@ -74,7 +74,7 @@ func TestWin(t *testing.T) {
         - Simple / generic / variadic function or method (value or pointer receiver)
         - Supporting hook function
         - Supporting `PatchConvey` and `PatchRun` (automatically release mocks after each test case)
-        - Providing `GetMethod` to handle special cases (e.g., exported method of unexported types, unexported method, and methods in nested structs)
+        - Providing `GetMethod` to handle special cases (e.g., unexported types, unexported method, and methods in nested structs)
     - Advanced
         - Conditional mocking
         - Sequence returning
@@ -421,7 +421,7 @@ func main() {
 }
 ```
 
-Mock exported method of unexported types:
+Mock method of unexported types:
 ```go
 package main
 
@@ -460,6 +460,27 @@ func main() {
 	buf := bytes.NewBuffer([]byte{1, 2, 3, 4})
 	b, err := buf.ReadByte()
 	fmt.Println(b, err)      // 0 EOF | `ReadByte` calls `empty` method inside to check if the buffer is empty and return io.EOF
+}
+```
+The Go compiler may directly erase the type information of unexported methods, in which case `GetMethod` will fail to retrieve the method. In such cases, you can use `OptUnexportedTargetType` to explicitly specify its type:
+```go
+package main
+
+import (
+	"bytes"
+	"fmt"
+
+	. "github.com/bytedance/mockey"
+)
+
+func main() {
+	var targetType func() bool // Signature of the unexported `empty` method (excluding receiver)
+	target := GetMethod(new(bytes.Buffer), "empty", OptUnexportedTargetType(targetType))
+	Mock(target).Return(true).Build()
+
+	buf := bytes.NewBuffer([]byte{1, 2, 3, 4})
+	b, err := buf.ReadByte()
+	fmt.Println(b, err) // 0 EOF | `ReadByte` internally calls the `empty` method to check if the buffer is empty and returns io.EOF
 }
 ```
 
