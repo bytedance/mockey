@@ -1,4 +1,5 @@
 ignore:
   - "internal"
+  - "exp/iface/internal"
 
 
