@@ -78,6 +78,7 @@ func TestWin(t *testing.T) {
     - 支持`PatchConvey`和`PatchRun`（每个测试用例后自动释放 mock）
     - 提供`GetMethod`处理特殊情况（如未导出类型、未导出方法和嵌套结构体中的方法）
   - 高级功能
+    - 接口 mock（实验特性）
     - 条件 mock
     - 序列返回
     - 装饰器模式（在 mock 的同时执行原始函数）
@@ -512,6 +513,61 @@ func main() {
 ```
 
 ## 高级特性
+### 接口 mock
+> 该特性目前是实验特性，相关 API 在`exp/iface`包下，且保留在后续版本中变动的可能性
+从 v1.4.4 版本开始，我们支持对某个接口方法进行 mock，其作用是 mock 其所有的实现类型的相应方法。
+```go
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"net"
+	"os"
+
+	. "github.com/bytedance/mockey/exp/iface"
+)
+
+func main() {
+	// Mock 所有的 Reader 接口的实现类型的 Read 方法
+	Mock(io.Reader.Read).Return(1, io.EOF).Build()
+
+	reader1 := bytes.NewReader(nil)
+	reader2 := bytes.NewBufferString("")
+	reader3 := new(net.TCPConn)
+	reader4 := new(os.File)
+
+	fmt.Println(io.ReadAll(reader1)) // [0] <nil>, mocked
+	fmt.Println(io.ReadAll(reader2)) // [0] <nil>, mocked
+	fmt.Println(io.ReadAll(reader3)) // [0] <nil>, mocked
+	fmt.Println(io.ReadAll(reader4)) // [0] <nil>, mocked
+}
+```
+如果希望限制 mock 的范围，即只 mock 某个接口的某些实现类型的方法，可以使用选择器（包名/类型名）选项进行过滤。
+```go
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+
+	. "github.com/bytedance/mockey/exp/iface"
+)
+
+func main() {
+	Mock(io.Reader.Read, SelectType("Reader"), SelectPkg("bytes")).Return(1, io.EOF).Build() // 只 mock bytes.Reader 类型的 Read 方法
+
+	reader1 := bytes.NewReader(nil)
+	reader2 := bytes.NewBufferString("")
+
+	fmt.Println(io.ReadAll(reader1)) // [0] <nil>, mock 生效
+	fmt.Println(io.ReadAll(reader2)) // [] <nil>, mock 不生效, 被选择器过滤
+}
+```
+欢迎加入我们的讨论，更多信息请参阅 [#3](https://github.com/bytedance/mockey/issues/3#issuecomment-3759010755)。
+
 ### 条件 mock
 使用 `When` 定义多个条件：
 ```go
@@ -814,7 +870,7 @@ func main() {
 }
 ```
 
-方法三：我们正在考虑实现一个 interface mock 功能，详见[#3](https://github.com/bytedance/mockey/issues/3)
+方法三（推荐）：使用接口 mock 功能，参考 [接口 mock](#接口-mock) 小节。
 
 ### 如何 mock 依赖包 init() 里的函数？
 经常我们会遇到这个问题：依赖包中存在 init 函数，init 函数在本地或者 CI 环境执行会 panic，导致单元测试会直接失败。这时候我们会希望将 panic 的函数 mock 掉，但是由于 init 函数的执行会早于单元测试，故一般的方法无法成功。

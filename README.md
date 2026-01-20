@@ -76,6 +76,7 @@ func TestWin(t *testing.T) {
         - Supporting `PatchConvey` and `PatchRun` (automatically release mocks after each test case)
         - Providing `GetMethod` to handle special cases (e.g., unexported types, unexported method, and methods in nested structs)
     - Advanced
+        - Interface mocking (experimental feature)
         - Conditional mocking
         - Sequence returning
         - Decorator pattern (execute the original function after mocking)
@@ -513,6 +514,62 @@ func main() {
 ```
 
 ## Advanced features
+### Interface mocking
+> This feature is currently experimental, the relevant API is under the `exp/iface` package, and it may be changed in future versions.
+
+Starting from v1.4.4, we support mocking interface methods, which mocks the corresponding methods of all their implementation types.
+```go
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"net"
+	"os"
+
+	. "github.com/bytedance/mockey/exp/iface"
+)
+
+func main() {
+	// Mock the Read method of all Reader interface implementation types
+	Mock(io.Reader.Read).Return(1, io.EOF).Build()
+
+	reader1 := bytes.NewReader(nil)
+	reader2 := bytes.NewBufferString("")
+	reader3 := new(net.TCPConn)
+	reader4 := new(os.File)
+
+	fmt.Println(io.ReadAll(reader1)) // [0] <nil>, mocked
+	fmt.Println(io.ReadAll(reader2)) // [0] <nil>, mocked
+	fmt.Println(io.ReadAll(reader3)) // [0] <nil>, mocked
+	fmt.Println(io.ReadAll(reader4)) // [0] <nil>, mocked
+}
+```
+If you want to limit the scope of mocking, that is, only mock the methods of some implementation types of an interface, you can use the selector (package name/type name) option to filter.
+```go
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+
+	. "github.com/bytedance/mockey/exp/iface"
+)
+
+func main() {
+	Mock(io.Reader.Read, SelectType("Reader"), SelectPkg("bytes")).Return(1, io.EOF).Build() // only mock the Read method of bytes.Reader type
+
+	reader1 := bytes.NewReader(nil)
+	reader2 := bytes.NewBufferString("")
+
+	fmt.Println(io.ReadAll(reader1)) // [0] <nil>, mocked
+	fmt.Println(io.ReadAll(reader2)) // [] <nil>, not mocked, filtered by selector
+}
+```
+Welcome to join our discussion, see [#3](https://github.com/bytedance/mockey/issues/3#issuecomment-3759010755) for more information.
+
 ### Conditional mocking
 Use `When` to define multiple conditions:
 ```go
@@ -814,7 +871,7 @@ func main() {
    fmt.Println(NewFoo().Foo("anything")) // MOCKED!
 }
 ```
-Method 3: We are working on a interface mocking feature, see [#3](https://github.com/bytedance/mockey/issues/3)
+Method 3 (recommended): Use the interface mocking feature, refer to [Interface mocking](#interface-mocking) section.
 
 ### How to mock functions in dependency package init()?
 We often encounter this problem: there is an init function in the dependency package that panics when executed in local or CI environment, causing unit tests to fail directly. We hope to mock the panicking function, but since init functions execute before unit tests, general methods cannot succeed.
