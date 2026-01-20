@@ -34,6 +34,18 @@ type MockBuilder struct {
 	builders []*mockey.MockBuilder
 }
 
+// Mock mocks the given interface method. This will mock all the implemented methods of the interface. Note this is an
+// experimental feature.
+//
+// Example:
+// Mock(io.Reader.Read).Return(1, io.EOF).Build() // mock all implemented methods of io.Reader
+//
+// If you want to limit the mock scope to specific methods, you can use the select option.
+//
+// Example:
+// Mock(io.Reader.Read, SelectType("Buffer"), SelectPkg("bytes")).Return(1, io.EOF).Build() // only mock bytes.Buffer
+//
+// For more details, please refer to https://github.com/bytedance/mockey/issues/3#issuecomment-3759010755.
 func Mock(target interface{}, opt ...OptionFn) *MockBuilder {
 	opts := resolveOpt(opt...)
 	targets := internal.FindImplementTargets(target, opts.selector)
