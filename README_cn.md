@@ -76,6 +76,7 @@ func TestWin(t *testing.T) {
     - 简单/泛型/可变参数函数或方法（值或指针接收器）
     - 支持钩子函数
     - 支持`PatchConvey`和`PatchRun`（每个测试用例后自动释放 mock）
+    - 支持`BuildT`（将 mock 生命周期绑定到`*testing.T`）
     - 提供`GetMethod`处理特殊情况（如未导出类型、未导出方法和嵌套结构体中的方法）
   - 高级功能
     - 接口 mock（实验特性）
@@ -299,7 +300,7 @@ func main() {
 ### 支持`PatchConvey`和`PatchRun`
 > 从 v1.4.1 版本开始支持 `PatchRun`
 
-`PatchConvey`和`PatchRun`都是用于管理 mock 生命周期的工具，它们会在测试用例或函数执行完成后自动释放 mock，从而免去`defer`的苦恼。`PatchConvey`和`PatchRun`都支持嵌套使用，每层只会释放自己内部的 mock。
+`PatchConvey`和`PatchRun`都是用于管理 mock 生命周期的工具，它们会在测试用例或函数执行完成后自动释放 mock，从而免去`defer`的苦恼。它们都支持嵌套使用，每层只会释放自己内部的 mock。
 
 适用场景对比：
 - 当您需要使用 goconvey 框架的断言功能和测试组织能力时，推荐使用`PatchConvey`；嵌套`PatchConvey`的执行顺序和`Convey`一致，请参考 goconvey 相关[文档](https://github.com/smartystreets/goconvey/wiki/Execution-order)
@@ -390,6 +391,62 @@ func TestXXX(t *testing.T) {
 }
 
 ```
+
+### 支持`BuildT`
+
+`BuildT`将每个 mock 的生命周期绑定到`*testing.T`（或任何实现了`mockey.TestingT`接口的值），mock 会在测试或子测试结束时自动清理，既不需要`defer`，也不依赖 goconvey。对于不使用 goconvey 的测试，这是最符合 Go 习惯的方式，并且兼容通过`t.Run`创建的子测试。
+
+`BuildT`示例如下：
+```go
+package main_test
+
+import (
+	"testing"
+
+	. "github.com/bytedance/mockey"
+)
+
+func Foo(in string) string {
+	return "ori:" + in
+}
+
+func Bar() string {
+	return "ori:bar"
+}
+
+func TestXXX(t *testing.T) {
+	Mock(Foo).Return("MOCKED-1!").BuildT(t)
+	if got := Foo("anything"); got != "MOCKED-1!" {
+		t.Errorf("expected 'MOCKED-1!', got '%s'", got)
+	}
+
+	t.Run("subtest A", func(t *testing.T) {
+		// 每个子测试可以注册自己绑定到对应 *testing.T 的 mock。
+		// 在子测试中 mock 与父测试不同的目标；mockey 在没有先 Release 的情况下重复 mock 同一个目标会 panic。
+		Mock(Bar).Return("subtest-A").BuildT(t)
+		if got := Bar(); got != "subtest-A" {
+			t.Errorf("expected 'subtest-A', got '%s'", got)
+		}
+		// 在子测试内部，父测试对 Foo 的 mock 仍然生效：
+		if got := Foo("anything"); got != "MOCKED-1!" {
+			t.Errorf("expected 'MOCKED-1!', got '%s'", got)
+		}
+	})
+	// 子测试 A 对 Bar 的 mock 已经被清理；父测试对 Foo 的 mock 仍然生效。
+
+	// TestXXX 返回时，所有通过 BuildT(t) 注册的 mock 都会被释放
+}
+```
+
+`BuildT` 接收任何实现了`mockey.TestingT`接口的值：
+
+```go
+type TestingT interface {
+	Cleanup(func())
+}
+```
+
+`*testing.T`、`*testing.B`和`*testing.F`均满足该接口，因此`BuildT`可用于单元测试、基准测试和模糊测试。`BuildT` 也可以与`PatchRun`或`PatchConvey`组合使用：内层作用域的清理先执行，随后外层的`t.Cleanup`作为幂等的无操作执行（`UnPatch`是幂等的）。
 
 ### 提供 `GetMethod` 处理特殊情况
 在无法直接 mock 或者 mock 不生效特殊情况下，可以使用`GetMethod`在获取相应方法后 mock，使用前请确保传入的对象不为 nil。

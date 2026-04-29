@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -444,5 +445,168 @@ func TestMultiArgs(t *testing.T) {
 				So(_x, ShouldEqual, 0)
 			}
 		})
+	})
+}
+
+// Compile-time assertions that the standard *testing types satisfy TestingT.
+// If Go ever removed Cleanup from any of them (it won't), this catches it.
+var (
+	_ TestingT = (*testing.T)(nil)
+	_ TestingT = (*testing.B)(nil)
+	_ TestingT = (*testing.F)(nil)
+)
+
+//go:noinline
+func buildTFoo() string {
+	return "original"
+}
+
+func TestBuildT_BasicCleanup(t *testing.T) {
+	t.Run("inner", func(t *testing.T) {
+		Mock(buildTFoo).Return("mocked").BuildT(t)
+		if got := buildTFoo(); got != "mocked" {
+			t.Fatalf("inside inner: got %q, want %q", got, "mocked")
+		}
+	})
+	if got := buildTFoo(); got != "original" {
+		t.Fatalf("after inner returned: got %q, want %q (cleanup did not fire)", got, "original")
+	}
+}
+
+//go:noinline
+func buildTBar() string {
+	return "original-bar"
+}
+
+func TestBuildT_NilPanics(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic on BuildT(nil)")
+		}
+		msg, _ := r.(string)
+		if !strings.Contains(msg, "BuildT called with nil t") {
+			t.Fatalf("unexpected panic message: %v", r)
+		}
+		// The assertion must fire before Build(), so the target
+		// must remain unpatched.
+		if got := buildTBar(); got != "original-bar" {
+			t.Fatalf("buildTBar was patched (and leaked): got %q", got)
+		}
+	}()
+	Mock(buildTBar).Return("mocked").BuildT(nil)
+}
+
+//go:noinline
+func buildTBaz() string {
+	return "original-baz"
+}
+
+//go:noinline
+func buildTChild() string {
+	return "original-child"
+}
+
+func TestBuildT_Subtests(t *testing.T) {
+	t.Run("parent", func(t *testing.T) {
+		Mock(buildTBaz).Return("outer").BuildT(t)
+		if got := buildTBaz(); got != "outer" {
+			t.Fatalf("parent: got %q, want %q", got, "outer")
+		}
+
+		t.Run("child", func(t *testing.T) {
+			// Mock a different target in the child. mockey panics on
+			// re-mocking the same target without Release first
+			// (see global.go:37 "re-mock %v, previous mock at: %v"),
+			// so the cleanest way to verify per-subtest scoping is to
+			// have parent and child mock different functions.
+			Mock(buildTChild).Return("child-mocked").BuildT(t)
+			if got := buildTChild(); got != "child-mocked" {
+				t.Fatalf("child: buildTChild got %q, want %q", got, "child-mocked")
+			}
+			if got := buildTBaz(); got != "outer" {
+				t.Fatalf("child: buildTBaz parent mock not visible: got %q, want %q", got, "outer")
+			}
+		})
+
+		// Child's mock on buildTChild is cleaned up; parent's mock on
+		// buildTBaz is still active.
+		if got := buildTChild(); got != "original-child" {
+			t.Fatalf("after child: buildTChild not restored: got %q, want %q", got, "original-child")
+		}
+		if got := buildTBaz(); got != "outer" {
+			t.Fatalf("after child: parent mock cleared: got %q, want %q", got, "outer")
+		}
+	})
+
+	if got := buildTBaz(); got != "original-baz" {
+		t.Fatalf("after parent: buildTBaz not restored: got %q, want %q", got, "original-baz")
+	}
+}
+
+//go:noinline
+func buildTQux() string {
+	return "original-qux"
+}
+
+func TestBuildT_WithPatchRun(t *testing.T) {
+	PatchRun(func() {
+		Mock(buildTQux).Return("mocked").BuildT(t)
+		if got := buildTQux(); got != "mocked" {
+			t.Fatalf("inside PatchRun: got %q, want %q", got, "mocked")
+		}
+	})
+	// PatchRun's closure-scoped cleanup runs first; t.Cleanup runs at the
+	// end of TestBuildT_WithPatchRun and must not panic on the
+	// already-unpatched mocker.
+	if got := buildTQux(); got != "original-qux" {
+		t.Fatalf("after PatchRun: got %q, want %q", got, "original-qux")
+	}
+}
+
+//go:noinline
+func buildTManual() string {
+	return "original-manual"
+}
+
+func TestBuildT_ManualUnPatchFirst(t *testing.T) {
+	t.Run("inner", func(t *testing.T) {
+		m := Mock(buildTManual).Return("mocked").BuildT(t)
+		if got := buildTManual(); got != "mocked" {
+			t.Fatalf("before manual UnPatch: got %q, want %q", got, "mocked")
+		}
+		m.UnPatch()
+		if got := buildTManual(); got != "original-manual" {
+			t.Fatalf("after manual UnPatch: got %q, want %q", got, "original-manual")
+		}
+		// When the inner subtest exits, t.Cleanup will fire and call
+		// UnPatch again on the already-unpatched mocker. This must be a
+		// no-op (no panic).
+	})
+	if got := buildTManual(); got != "original-manual" {
+		t.Fatalf("after inner: got %q, want %q", got, "original-manual")
+	}
+}
+
+//go:noinline
+func buildTCount() int {
+	return 0
+}
+
+func TestBuildT_ReturnsMocker(t *testing.T) {
+	t.Run("inner", func(t *testing.T) {
+		m := Mock(buildTCount).Return(42).BuildT(t)
+		if m == nil {
+			t.Fatal("BuildT returned nil")
+		}
+		_ = buildTCount()
+		_ = buildTCount()
+		_ = buildTCount()
+		if got := m.Times(); got != 3 {
+			t.Fatalf("Times: got %d, want 3", got)
+		}
+		if got := m.MockTimes(); got != 3 {
+			t.Fatalf("MockTimes: got %d, want 3", got)
+		}
 	})
 }
