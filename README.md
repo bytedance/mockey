@@ -73,7 +73,7 @@ func TestWin(t *testing.T) {
     - Basic
         - Simple / generic / variadic function or method (value or pointer receiver)
         - Supporting hook function
-        - Supporting `PatchConvey` and `PatchRun` (automatically release mocks after each test case)
+        - Supporting `PatchConvey`, `PatchRun`, BuildT (automatically release mocks after each test case)
         - Providing `GetMethod` to handle special cases (e.g., unexported types, unexported method, and methods in nested structs)
     - Advanced
         - Interface mocking (experimental feature)
@@ -392,6 +392,63 @@ func TestXXX(t *testing.T) {
 	}
 }
 ```
+
+### Supporting `BuildT`
+
+`BuildT` binds each mock's lifecycle to a `*testing.T` (or any value satisfying the `mockey.TestingT` interface), so cleanup runs automatically when the test or subtest exits, with no `defer` and no goconvey dependency. It's the most idiomatic option for tests that don't use goconvey, and works in subtests created via `t.Run`.
+
+`BuildT` example as follows:
+```go
+package main_test
+
+import (
+	"testing"
+
+	. "github.com/bytedance/mockey"
+)
+
+func Foo(in string) string {
+	return "ori:" + in
+}
+
+func Bar() string {
+	return "ori:bar"
+}
+
+func TestXXX(t *testing.T) {
+	Mock(Foo).Return("MOCKED-1!").BuildT(t)
+	if got := Foo("anything"); got != "MOCKED-1!" {
+		t.Errorf("expected 'MOCKED-1!', got '%s'", got)
+	}
+
+	t.Run("subtest A", func(t *testing.T) {
+		// Each subtest can register its own mocks bound to its own *testing.T.
+		// Mock a different target than the parent's; mockey panics on
+		// re-mocking the same target without Release first.
+		Mock(Bar).Return("subtest-A").BuildT(t)
+		if got := Bar(); got != "subtest-A" {
+			t.Errorf("expected 'subtest-A', got '%s'", got)
+		}
+		// Parent's mock on Foo is still active inside the subtest:
+		if got := Foo("anything"); got != "MOCKED-1!" {
+			t.Errorf("expected 'MOCKED-1!', got '%s'", got)
+		}
+	})
+	// subtest A's mock on Bar is cleaned up; parent's mock on Foo is still active.
+
+	// After TestXXX returns, all mocks registered via BuildT(t) are released.
+}
+```
+
+`BuildT` accepts any value that satisfies the `mockey.TestingT` interface:
+
+```go
+type TestingT interface {
+	Cleanup(func())
+}
+```
+
+`*testing.T`, `*testing.B`, and `*testing.F` all satisfy it, so `BuildT` works in unit tests, benchmarks, and fuzz tests. `BuildT` can also be combined with `PatchRun` or `PatchConvey`: the inner scope's cleanup fires first, and the outer `t.Cleanup` is then a safe no-op (`UnPatch` is idempotent).
 
 ### Providing `GetMethod` to handle special cases
 In special cases where direct mocking is not possible or not effective, you can use `GetMethod` to get the corresponding method before mocking. Please ensure that the passed object is not nil.

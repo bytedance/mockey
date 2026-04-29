@@ -205,6 +205,28 @@ func (builder *MockBuilder) Build() *Mocker {
 	return &mocker
 }
 
+// TestingT is the minimal subset of *testing.T that BuildT depends on.
+// *testing.T, *testing.B, and *testing.F all satisfy this interface.
+type TestingT interface {
+	Cleanup(func())
+}
+
+// BuildT builds the mock (same as Build) and registers t.Cleanup to UnPatch
+// it when the test or subtest exits.
+//
+// Equivalent to:
+//
+//	m := builder.Build()
+//	t.Cleanup(func() { m.UnPatch() })
+//
+// Panics if t is nil.
+func (builder *MockBuilder) BuildT(t TestingT) *Mocker {
+	tool.Assert(t != nil, "BuildT called with nil t")
+	m := builder.Build()
+	t.Cleanup(func() { m.UnPatch() })
+	return m
+}
+
 func (mocker *Mocker) build() {
 	mocker.target = reflect.ValueOf(mocker.builder.target)
 
