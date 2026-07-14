@@ -64,6 +64,37 @@ func VariantParam(a int, b ...int) (int, int) {
 
 func ShortFun() {}
 
+func TestBuildFailureRestoresOrigin(t *testing.T) {
+	UnPatchAll()
+	defer UnPatchAll()
+
+	calls := 0
+	origin := func() {
+		calls++
+	}
+
+	var buildPanic interface{}
+	func() {
+		defer func() { buildPanic = recover() }()
+		Mock(ShortFun).To(func() {}).Origin(&origin).Build()
+	}()
+	if buildPanic == nil {
+		t.Fatal("safe patch of ShortFun unexpectedly succeeded")
+	}
+
+	var originPanic interface{}
+	func() {
+		defer func() { originPanic = recover() }()
+		origin()
+	}()
+	if originPanic != nil {
+		t.Fatalf("Origin panicked after rejected build: %v", originPanic)
+	}
+	if calls != 1 {
+		t.Fatalf("restored Origin calls = %d, want 1", calls)
+	}
+}
+
 func TestNoConvey(t *testing.T) {
 	origin := Fun
 	mock := func(p string) string {
