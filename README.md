@@ -97,7 +97,7 @@ func TestWin(t *testing.T) {
 - ARM64
 
 ### Version Support 
-- Go 1.13+
+- Go 1.24+
 
 ## Basic Features
 ### Simple function/method

@@ -31,11 +31,7 @@ func fn2() {
 }
 
 func IsGCFlagsSet() bool {
-	var asm []byte
-	header := (*reflect.SliceHeader)(unsafe.Pointer(&asm))
-	header.Data = reflect.ValueOf(fn2).Pointer()
-	header.Len = 1000
-	header.Cap = 1000
+	asm := unsafe.Slice((*byte)(unsafe.Pointer(reflect.ValueOf(fn2).Pointer())), 1000)
 
 	flag := false
 	pos := 0

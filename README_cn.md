@@ -99,7 +99,7 @@ func TestWin(t *testing.T) {
 - ARM64
 
 ### 版本支持
-- Go 1.13+
+- Go 1.24+
 
 ## 基础特性
 ### 简单函数/方法

@@ -22,7 +22,7 @@ import (
 )
 
 func PtrOf(val []byte) uintptr {
-	return (*reflect.SliceHeader)(unsafe.Pointer(&val)).Data
+	return uintptr(unsafe.Pointer(unsafe.SliceData(val)))
 }
 
 func PtrAt(val reflect.Value) uintptr {
@@ -33,10 +33,13 @@ func PtrAt(val reflect.Value) uintptr {
 	return uintptr((*value)(unsafe.Pointer(&val)).ptr)
 }
 
-func BytesOf(addr uintptr, size int) (res []byte) {
-	h := (*reflect.SliceHeader)(unsafe.Pointer(&res))
-	h.Data = addr
-	h.Len = size
-	h.Cap = size
-	return res
+func BytesOf(addr uintptr, size int) []byte {
+	return unsafe.Slice((*byte)(pointerOf(addr)), size)
+}
+
+// pointerOf loads a raw virtual address through a pointer-typed view. Callers
+// use BytesOf only for executable code or mmap-backed memory, whose addresses
+// intentionally do not carry Go pointer provenance.
+func pointerOf(addr uintptr) unsafe.Pointer {
+	return *(*unsafe.Pointer)(unsafe.Pointer(&addr))
 }
