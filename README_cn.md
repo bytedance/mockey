@@ -97,9 +97,11 @@ func TestWin(t *testing.T) {
 ### 架构支持
 - AMD64
 - ARM64
+- RISC-V64（Linux）
 
 ### 版本支持
-- Go 1.13+
+- Go 1.24+
+- Linux/RISC-V64 需要 Go 1.26+
 
 ## 基础特性
 ### 简单函数/方法

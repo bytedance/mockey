@@ -14,37 +14,8 @@
  * limitations under the License.
  */
 
-package tool
+#include "textflag.h"
 
-import (
-	"reflect"
-	"unsafe"
-
-	"golang.org/x/arch/arm64/arm64asm"
-)
-
-func fn() {
-}
-
-func fn2() {
-	fn()
-}
-
-func IsGCFlagsSet() bool {
-	asm := unsafe.Slice((*byte)(unsafe.Pointer(reflect.ValueOf(fn2).Pointer())), 1000)
-
-	flag := false
-	pos := 0
-	for pos < len(asm) {
-		inst, _ := arm64asm.Decode(asm[pos:])
-		if inst.Op == arm64asm.RET {
-			break
-		}
-		if inst.Op == arm64asm.BL {
-			flag = true
-			break
-		}
-		pos += int(unsafe.Sizeof(inst.Enc))
-	}
-	return flag
-}
+TEXT ·getG(SB), NOSPLIT, $0
+	MOV	g, ret+0(FP)
+	RET
