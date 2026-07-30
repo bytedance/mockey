@@ -166,7 +166,8 @@ func PatchRun(f func()) {
 //		}
 //	}
 func UnPatchAll() {
-	for _, mocker := range gMocker[len(gMocker)-1] {
+	for key, mocker := range gMocker[len(gMocker)-1] {
 		mocker.unPatch()
+		delete(gMocker[len(gMocker)-1], key)
 	}
 }
