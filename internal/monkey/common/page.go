@@ -38,6 +38,17 @@ func AllocatePage() []byte {
 	return page
 }
 
+func AllocatePageNear(target uintptr) ([]byte, error) {
+	return allocateNear(target, int(pageSize))
+}
+
+func Rel32Reachable(from, to uintptr) bool {
+	if to >= from {
+		return to-from <= 1<<31-1
+	}
+	return from-to <= 1<<31
+}
+
 func ReleasePage(mem []byte) {
 	err := free(mem)
 	tool.Assert(err == nil, "free page failed: %v", err)

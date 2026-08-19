@@ -32,6 +32,8 @@ func Hook(in string) string {
 	return "MOCKED!"
 }
 
+func UnsafeTarget() {}
+
 func TestPatchFunc(t *testing.T) {
 	Convey("TestPatchFunc", t, func() {
 		Convey("normal", func() {

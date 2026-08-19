@@ -54,6 +54,46 @@ func allocate(n int) ([]byte, error) {
 	return BytesOf(ptr, n), nil
 }
 
+func allocateNear(target uintptr, n int) ([]byte, error) {
+	const allocationGranularity = uintptr(64 << 10)
+	offsets := [...]uintptr{1 << 20, 16 << 20, 64 << 20, 256 << 20, 512 << 20, 1 << 30, 1536 << 20}
+	for _, offset := range offsets {
+		for _, above := range []bool{true, false} {
+			hint, ok := nearHintWindows(target, offset, above)
+			if !ok {
+				continue
+			}
+			hint &^= allocationGranularity - 1
+			ptr, _, _ := virtualAlloc.Call(
+				hint,
+				uintptr(n),
+				_MEM_COMMIT|_MEM_RESERVE,
+				_PAGE_READWRITE,
+			)
+			if ptr == 0 {
+				continue
+			}
+			page := BytesOf(ptr, n)
+			if Rel32Reachable(target+5, ptr) && Rel32Reachable(target+5, ptr+uintptr(n-1)) {
+				return page, nil
+			}
+			_ = free(page)
+		}
+	}
+	return nil, fmt.Errorf("no free page within rel32 range of 0x%x", target)
+}
+
+func nearHintWindows(target, offset uintptr, above bool) (uintptr, bool) {
+	if above {
+		hint := target + offset
+		return hint, hint >= target
+	}
+	if offset > target {
+		return 0, false
+	}
+	return target - offset, true
+}
+
 func free(b []byte) error {
 	res, _, err := virtualFree.Call(
 		PtrOf(b),

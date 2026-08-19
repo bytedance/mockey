@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"encoding/binary"
 	"fmt"
 	"testing"
 
@@ -28,4 +29,25 @@ func Test_rdxMOV(t *testing.T) {
 		inst := fmt.Sprintf("%x", rdxMOV(0x123456789abcef01))
 		convey.So(inst, convey.ShouldEqual, "48ba01efbc9a78563412")
 	})
+}
+
+func TestBranchIntoShort(t *testing.T) {
+	from := uintptr(0x100000)
+	to := uintptr(0x200123)
+	code, ok := BranchIntoShort(from, to)
+	if !ok {
+		t.Fatal("expected target to be reachable")
+	}
+	if len(code) != ShortBranchSize() || code[0] != 0xe9 {
+		t.Fatalf("short branch = %x", code)
+	}
+	delta := int64(int32(binary.LittleEndian.Uint32(code[1:])))
+	got, valid := addSigned(from+uintptr(len(code)), delta)
+	if !valid || got != to {
+		t.Fatalf("short branch target = 0x%x, want 0x%x", got, to)
+	}
+
+	if _, ok := BranchIntoShort(from, from+1<<31+uintptr(ShortBranchSize())); ok {
+		t.Fatal("expected out-of-range target to be rejected")
+	}
 }

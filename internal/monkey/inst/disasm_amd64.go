@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -53,19 +54,107 @@ func calcFnAddrRange(name string, fn func()) (uintptr, uintptr) {
 	return 0, 0
 }
 
+// padByte is what the amd64 linker writes between functions.
+// See cmd/link/internal/amd64/obj.go: CodePad = []byte{0xCC} (INT $3),
+// emitted to pad each function entry up to funcAlign = 32
+// (cmd/link/internal/amd64/l.go).
+const padByte = 0xcc
+
+// Disassemble finds the cutting point, panicking when it cannot. This is the
+// long-standing entry point and its panic behaviour -- both when it fires and
+// what it carries -- is unchanged.
 func Disassemble(code []byte, required int, checkLen bool) int {
+	pos, err := disassemble(code, required, checkLen)
+	tool.Assert(err == nil, err)
+	return pos
+}
+
+// disassemble is the actual implementation. It reports refusals as an error
+// instead of panicking, so callers that are merely probing a cutting point can
+// ask without arranging to catch a panic.
+//
+// Returning an error rather than recovering in the caller matters for two
+// reasons. Refusal reasons can be added here later and no probing caller can
+// silently miss one, because there is nothing to keep in sync. And a genuine
+// bug in this function -- a slice overrun, a nil deref -- still panics and
+// still escapes, instead of being quietly reported as "this function is not
+// patchable"; only the errors returned below are treated as refusals.
+func disassemble(code []byte, required int, checkLen bool) (int, error) {
 	var pos int
 	var err error
 	var inst x86asm.Inst
 
 	for pos < required {
 		inst, err = x86asm.Decode(code[pos:], 64)
-		tool.Assert(err == nil, err)
+		if err != nil {
+			return 0, err
+		}
 		tool.DebugPrintf("Disassemble: %3d\t0x%x\t%v\n", pos, common.PtrOf(code)+uintptr(pos), inst)
-		tool.Assert(inst.Op != x86asm.RET || !checkLen, "function is too short to patch")
+		if inst.Op == x86asm.RET {
+			// The target's own code ends here, so it is shorter than the branch
+			// sequence we need to write. That is only fatal if the remaining bytes
+			// belong to the *next* function. On amd64 they do not: the linker aligns
+			// every function entry to 32 bytes and fills the gap with 0xCC, which is
+			// dead space no control flow ever enters. Overwriting it is harmless, so
+			// only refuse when the tail is not padding.
+			//
+			// Why we keep decoding instead of `return required` -- read this before
+			// "simplifying" it back:
+			//
+			// The value returned here is PatchValue's cuttingIdx, and it is used for
+			// three things at once (internal/monkey/patch.go):
+			//   1. the trampoline saves code[:cuttingIdx],
+			//   2. the trampoline ends with BranchTo(targetAddr+cuttingIdx),
+			//   3. Unpatch restores cuttingIdx bytes.
+			// (2) makes cuttingIdx a *jump target in the original instruction
+			// stream*, so it MUST sit on an instruction boundary; (1) means the
+			// saved prefix must end on one too, or the trampoline's last "instruction"
+			// is a truncated fragment. `required` is just the length of the branch
+			// sequence (12 bytes here) -- nothing makes it land on a boundary.
+			//
+			// The non-RET exit below returns `pos`, which is boundary-aligned by
+			// construction. The RET branch returning the raw `required` was the odd
+			// one out, and it is exactly the bug: for a frameless function with an
+			// early `return`, e.g.
+			//     @0 TEST(3) @3 JLE(2) @5 MOV(5) @10 RET(1) @11 IMUL(4) @15 ...
+			// the loop hits RET at pos=10 and returns 12 -- which is the *middle* of
+			// the 4-byte IMUL at [11,15). The trampoline then keeps only the orphan
+			// REX prefix 0x48 of that IMUL and jumps back into its middle, so the CPU
+			// executes a garbage instruction stream. Depending on how those bytes
+			// happen to decode you get a SIGSEGV or, worse, a silently wrong result.
+			//
+			// So instead of trusting `required`, walk whole instructions until we are
+			// at or past it, and return that boundary. The returned value is still
+			// >= required (never restoring/overwriting less than the branch sequence),
+			// it is just rounded up to the next boundary instead of cutting blindly.
+			//
+			// Note this changes nothing for the checkLen==true (Mock) path: there
+			// every skipped byte must be 0xCC padding, and INT3 is 1 byte long, so pos
+			// lands exactly on `required` anyway. Only the checkLen==false
+			// (MockUnsafe) path, which is allowed to run past real code, is fixed.
+			pos += inst.Len // step over the RET itself first -- otherwise the very
+			// first iteration would test the RET opcode 0xc3 against padByte and
+			// wrongly report "function is too short to patch", and would re-decode
+			// the same RET forever.
+			for pos < required {
+				if !(code[pos] == padByte || !checkLen) {
+					return 0, errors.New(errFunctionTooShort)
+				}
+				inst, err = x86asm.Decode(code[pos:], 64)
+				if err != nil {
+					return 0, err
+				}
+				pos += inst.Len
+			}
+			// Bound check for the caller: pos < required <= len(hookCode) == 12 on
+			// entry to the last iteration, and an x86 instruction is at most 15 bytes,
+			// so pos <= 26 here -- well inside the 64-byte targetCodeBuf and nowhere
+			// near the page the trampoline is written into.
+			return pos, nil
+		}
 		pos += inst.Len
 	}
-	return pos
+	return pos, nil
 }
 
 func GetGenericAddr(addr uintptr, maxScan int) (jumpAddr, genericInfoAddr uintptr) {

@@ -17,6 +17,7 @@
 package inst
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"unsafe"
@@ -57,19 +58,41 @@ func calcFnAddrRange(name string, fn func()) (uintptr, uintptr) {
 	return 0, 0
 }
 
+// Disassemble finds the cutting point, panicking when it cannot. Behaviour is
+// unchanged; it delegates to disassemble so that the panicking and probing
+// entry points share one implementation, as on amd64.
 func Disassemble(code []byte, required int, checkLen bool) int {
+	pos, err := disassemble(code, required, checkLen)
+	tool.Assert(err == nil, err)
+	return pos
+}
+
+// disassemble reports a refusal as an error instead of panicking. See the amd64
+// version for why probing returns an error rather than recovering a panic.
+//
+// Note this arm64 body is the real decode loop, not the length check the
+// v1.2.15 line had: this branch already carried the short-function work, so the
+// loop walks whole 4-byte instructions and refuses on an early RET. The two
+// refusals it can report -- an undecodable instruction and an early RET -- both
+// become errors here, and Disassemble above turns them back into the same panic
+// they always were.
+func disassemble(code []byte, required int, checkLen bool) (int, error) {
 	var pos int
 	var err error
 	var inst arm64asm.Inst
 
 	for pos < required {
 		inst, err = arm64asm.Decode(code[pos:])
-		tool.Assert(err == nil || !checkLen, err)
+		if err != nil && checkLen {
+			return 0, err
+		}
 		tool.DebugPrintf("Disassemble: %3d\t0x%x\t%v\n", pos, common.PtrOf(code)+uintptr(pos), inst)
-		tool.Assert(inst.Op != arm64asm.RET || !checkLen, "function is too short to patch")
+		if inst.Op == arm64asm.RET && checkLen {
+			return 0, errors.New(errFunctionTooShort)
+		}
 		pos += instLen
 	}
-	return pos
+	return pos, nil
 }
 
 func GetGenericAddr(addr uintptr, maxScan int) (jumpAddr, genericInfoAddr uintptr) {
