@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to bound Go 1.27 trampoline instruction reads.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +19,8 @@ package monkey
 
 import (
 	"reflect"
+	"runtime"
+	"sort"
 
 	"github.com/bytedance/mockey/internal/monkey/common"
 	"github.com/bytedance/mockey/internal/monkey/fn"
@@ -28,9 +31,11 @@ import (
 
 // Patch is a context that holds the address and original codes of the patched function.
 type Patch struct {
-	size int
-	code []byte
-	base uintptr
+	code      []byte
+	base      uintptr
+	original  []byte
+	entryCode []byte
+	hook      reflect.Value // Machine-code pointers do not keep the hook closure alive for GC.
 }
 
 // Base returns the address of the patched function.
@@ -40,7 +45,7 @@ func (p *Patch) Base() uintptr {
 
 // Unpatch restores the patched function to the original function.
 func (p *Patch) Unpatch() {
-	mem.WriteWithSTW(p.base, p.code[:p.size])
+	mem.WriteWithSTW(p.base, p.original)
 	common.ReleasePage(p.code)
 }
 
@@ -51,30 +56,86 @@ func PatchValue(target, hook, proxy reflect.Value, unsafe bool) *Patch {
 	tool.Assert(proxy.Kind() == reflect.Ptr, "'%v' is not a function pointer", proxy.Kind())
 
 	targetAddr := target.Pointer()
-	// The first few bytes of the target function code
-	const bufSize = 64
-	targetCodeBuf := common.BytesOf(targetAddr, bufSize)
+	// Bound instruction reads by the runtime function table. ARM64 also needs
+	// to inspect backward branches after the prefix to keep initialization
+	// loops together when constructing the Origin trampoline.
+	codeSize := targetCodeSize(targetAddr)
+	targetCodeBuf := common.BytesOf(targetAddr, codeSize)
 	// construct the branch instruction, i.e. jump to the hook function
 	hookCode := inst.BranchInto(common.PtrAt(hook))
 	// construct the proxy code
 	proxyCode := common.AllocatePage()
+	installed := false
+	defer func() {
+		if !installed {
+			common.ReleasePage(proxyCode)
+		}
+	}()
 	tool.DebugPrintf("PatchValue: target addr(0x%x), proxy addr(%p), hook code len(%v)\n", targetAddr, &proxyCode[0], len(hookCode))
 	// search the cutting point of the target code, i.e. the minimum length of full instructions that is longer than the hookCode
 	cuttingIdx := inst.Disassemble(targetCodeBuf, len(hookCode), !unsafe)
+	// MockUnsafe deliberately permits a hook to overlap a short function's
+	// boundary. Save exactly the bytes it will overwrite so Unpatch restores
+	// them, while keeping the instruction scan within the function itself.
+	if cuttingIdx > len(targetCodeBuf) {
+		tool.Assert(unsafe, "function is too short to patch")
+		targetCodeBuf = common.BytesOf(targetAddr, cuttingIdx)
+	}
 	// save the original code before the cutting point
+	branchBack := inst.BranchToOriginal(targetAddr + uintptr(cuttingIdx))
+	tool.Assert(cuttingIdx+len(branchBack) <= len(proxyCode), "initialization loop is too large to patch")
 	copy(proxyCode, targetCodeBuf[:cuttingIdx])
 	// construct the branch instruction, i.e. jump to the cutting point
-	copy(proxyCode[cuttingIdx:], inst.BranchTo(targetAddr+uintptr(cuttingIdx)))
+	copy(proxyCode[cuttingIdx:], branchBack)
+	original := append([]byte(nil), targetCodeBuf[:cuttingIdx]...)
+	relocationEnd := cuttingIdx
+	if relocationEnd > codeSize {
+		relocationEnd = codeSize
+	}
+	inst.RelocateBranches(proxyCode, targetAddr, relocationEnd, cuttingIdx+len(branchBack))
 	// inject the proxy code to the proxy function
 	fn.InjectInto(proxy, proxyCode)
 	// replace target function codes before the cutting point
 	mem.WriteWithSTW(targetAddr, hookCode)
+	installed = true
 
-	return &Patch{base: targetAddr, code: proxyCode, size: cuttingIdx}
+	return &Patch{base: targetAddr, code: proxyCode, original: original, entryCode: hookCode, hook: hook}
 }
 
 func PatchFunc(fn, hook, proxy interface{}, unsafe bool) *Patch {
 	vv := reflect.ValueOf(fn)
 	tool.Assert(vv.Kind() == reflect.Func, "'%v' is not a function", fn)
 	return PatchValue(vv, reflect.ValueOf(hook), reflect.ValueOf(proxy), unsafe)
+}
+
+// targetCodeSize queries metadata rather than reading past a function while
+// looking for its end. runtime.FuncForPC includes dynamically loaded modules,
+// unlike the main module's function list used for symbol-name discovery.
+func targetCodeSize(entry uintptr) int {
+	function := runtime.FuncForPC(entry)
+	tool.Assert(function != nil && function.Entry() == entry, "target function bounds not found")
+	outside := func(offset int) bool {
+		function := runtime.FuncForPC(entry + uintptr(offset))
+		return function == nil || function.Entry() != entry
+	}
+	limit := 64
+	if runtime.GOARCH == "arm64" {
+		for !outside(limit) {
+			tool.Assert(limit < 1<<24, "target function is too large to analyze")
+			limit *= 2
+		}
+	}
+	return sort.Search(limit, outside)
+}
+
+// IsCurrent reports whether this patch owns the function's current entry.
+// Older layered patches remain callable through proxies but do not own it.
+func (p *Patch) IsCurrent() bool {
+	current := common.BytesOf(p.base, len(p.entryCode))
+	for index, instruction := range p.entryCode {
+		if current[index] != instruction {
+			return false
+		}
+	}
+	return true
 }

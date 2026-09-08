@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to analyze Go 1.27 generic method closures.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +18,7 @@
 package inst
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 
@@ -195,4 +197,73 @@ func (g *genericInfoInst) matchJumpInst(jumpInst *genericJmpInst) bool {
 // LEA RBX, [RIP+0x145d07]
 func (g *genericInfoInst) calcGenericInfoAddr() uintptr {
 	return g.lea.addr + uintptr(g.lea.inst.Len) + uintptr(g.lea.inst.Args[1].(x86asm.Mem).Disp)
+}
+
+// GenericClosureCaptureOffset returns the last captured word loaded by a
+// compiler-generated closure. The closure context register is DX on amd64.
+func GenericClosureCaptureOffset(addr uintptr, maxScan int) uintptr {
+	code := common.BytesOf(addr, maxScan)
+	var offset uintptr
+	for pos := 0; pos < maxScan; {
+		instruction, err := x86asm.Decode(code[pos:], 64)
+		tool.Assert(err == nil, err)
+		if instruction.Op == x86asm.RET {
+			return offset
+		}
+		if instruction.Op == x86asm.CALL {
+			jump := newGenericJmpInst(addr, pos, instruction)
+			if !jump.isExtraCall {
+				return offset
+			}
+		}
+		if instruction.Op == x86asm.MOV {
+			mem, ok := instruction.Args[1].(x86asm.Mem)
+			if ok && mem.Base == x86asm.RDX && mem.Index == 0 && mem.Disp > 0 && uintptr(mem.Disp) > offset {
+				offset = uintptr(mem.Disp)
+			}
+		}
+		pos += instruction.Len
+	}
+	return offset
+}
+
+// RelocateBranches makes relative control flow in the copied prefix target
+// local absolute-jump stubs. In particular, an Origin call can take the stack
+// growth branch even when the original call that reached the hook did not.
+func RelocateBranches(code []byte, original uintptr, prefixEnd, stubOffset int) {
+	for pos := 0; pos < prefixEnd; {
+		instruction, err := x86asm.Decode(code[pos:prefixEnd], 64)
+		tool.Assert(err == nil, err)
+		if instruction.Op == x86asm.RET {
+			return
+		}
+		if relative, ok := instruction.Args[0].(x86asm.Rel); ok {
+			targetOffset := pos + instruction.Len + int(relative)
+			if targetOffset < 0 || targetOffset >= prefixEnd {
+				stub := BranchToOriginal(original + uintptr(targetOffset))
+				tool.Assert(stubOffset+len(stub) <= len(code), "trampoline branch stubs exceed page size")
+				displacement := int64(stubOffset - pos - instruction.Len)
+				switch instruction.PCRel {
+				case 1:
+					tool.Assert(displacement >= -128 && displacement <= 127, "short trampoline branch is out of range")
+					code[pos+instruction.PCRelOff] = byte(int8(displacement))
+				case 4:
+					binary.LittleEndian.PutUint32(code[pos+instruction.PCRelOff:], uint32(int32(displacement)))
+				default:
+					tool.Assert(false, "unsupported relative branch: %v", instruction)
+				}
+				copy(code[stubOffset:], stub)
+				stubOffset += len(stub)
+			}
+		} else if instruction.PCRel != 0 {
+			// RIP-relative data references cannot use a branch island. Keep
+			// them only when their relocated signed displacement still fits.
+			tool.Assert(instruction.PCRel == 4, "unsupported PC-relative instruction: %v", instruction)
+			old := int64(int32(binary.LittleEndian.Uint32(code[pos+instruction.PCRelOff:])))
+			displacement := old + int64(original) - int64(common.PtrOf(code))
+			tool.Assert(displacement == int64(int32(displacement)), "PC-relative data reference is out of trampoline range: %v", instruction)
+			binary.LittleEndian.PutUint32(code[pos+instruction.PCRelOff:], uint32(int32(displacement)))
+		}
+		pos += instruction.Len
+	}
 }

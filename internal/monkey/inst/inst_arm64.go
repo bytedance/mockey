@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to preserve closure context in trampoline branches.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +22,7 @@ import "unsafe"
 func BranchTo(to uintptr) (res []byte) {
 	res = append(res, x26MOV(to)...)                     // MOV x26, to // fake
 	res = append(res, []byte{0x40, 0x03, 0x1f, 0xd6}...) // BR x26
-	return
+	return res
 }
 
 // BranchInto create a branch into command
@@ -32,7 +33,7 @@ func BranchInto(to uintptr) (res []byte) {
 	res = append(res, x26MOV(to)...)                     // MOV x26, to // fake
 	res = append(res, []byte{0x53, 0x03, 0x40, 0xf9}...) // LDR x19, [x26]
 	res = append(res, []byte{0x60, 0x02, 0x1f, 0xd6}...) // BR x19
-	return
+	return res
 }
 
 const x26 uint32 = 0b11010
@@ -66,4 +67,15 @@ func x26MOVK(val uintptr, shift int) []byte {
 	res := make([]byte, 4)
 	*(*uint32)(unsafe.Pointer(&res[0])) = inst
 	return res
+}
+
+// BranchToOriginal uses R16, a permanent scratch register in Go's ARM64 ABI,
+// and preserves the closure context in R26 and all argument registers.
+func BranchToOriginal(to uintptr) []byte {
+	code := x26MOV(to)
+	for offset := 0; offset < len(code); offset += instLen {
+		instruction := (*uint32)(unsafe.Pointer(&code[offset]))
+		*instruction = *instruction&^31 | 16
+	}
+	return append(code, 0x00, 0x02, 0x1f, 0xd6) // BR X16
 }

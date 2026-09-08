@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to verify hook lifetime during garbage collection.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +19,7 @@ package monkey
 
 import (
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -72,5 +74,34 @@ func TestPatchFunc(t *testing.T) {
 			patch.Unpatch()
 			So(Target("anything"), ShouldEqual, "anything")
 		})
+	})
+}
+
+func TestPatchKeepsHookAlive(t *testing.T) {
+	collected := make(chan struct{}, 1)
+	var proxy func(string) string
+	patch := PatchValue(reflect.ValueOf(Target), temporaryReflectHook(collected), reflect.ValueOf(&proxy), false)
+	defer patch.Unpatch()
+	for i := 0; i < 3; i++ {
+		runtime.GC()
+	}
+	select {
+	case <-collected:
+		t.Fatal("active patch lost the hook closure's GC root")
+	default:
+	}
+	if got := Target("original"); got != "retained hook" {
+		t.Fatalf("hook result = %q", got)
+	}
+}
+
+func temporaryReflectHook(collected chan<- struct{}) reflect.Value {
+	payload := &struct {
+		text    string
+		padding [64]byte
+	}{text: "retained hook"}
+	runtime.SetFinalizer(payload, func(interface{}) { collected <- struct{}{} })
+	return reflect.MakeFunc(reflect.TypeOf(Target), func([]reflect.Value) []reflect.Value {
+		return []reflect.Value{reflect.ValueOf(payload.text)}
 	})
 }
