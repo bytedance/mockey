@@ -40,10 +40,14 @@ type stwReason uint8
 // worldStop provides context from the stop-the-world required by the
 // start-the-world.
 type worldStop struct {
-	reason           stwReason
-	startedStopping  int64
+	//lint:ignore U1000 Required by the runtime.worldStop ABI.
+	reason stwReason
+	//lint:ignore U1000 Required by the runtime.worldStop ABI.
+	startedStopping int64
+	//lint:ignore U1000 Required by the runtime.worldStop ABI.
 	finishedStopping int64
-	stoppingCPUTime  int64
+	//lint:ignore U1000 Required by the runtime.worldStop ABI.
+	stoppingCPUTime int64
 }
 
 var (

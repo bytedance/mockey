@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 for Go 1.27 lint compatibility.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,7 +222,6 @@ func TestClass(t *testing.T) {
 				}).Build()
 				So(class{in: "abc"}.func1("xxx"), ShouldEqual, "mock")
 			})
-
 		})
 	})
 }

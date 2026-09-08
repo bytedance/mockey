@@ -3,6 +3,7 @@
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 for Go 1.27 lint compatibility.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +31,7 @@ func UnsafeTarget() {}
 func TestPatchUnsafeFunc(t *testing.T) {
 	Convey("TestPatchUnsafeFunc", t, func() {
 		var proxy func()
-		var hook = func() { panic("good") }
+		hook := func() { panic("good") }
 		Convey("normal", func() {
 			So(func() { PatchFunc(UnsafeTarget, hook, &proxy, false) }, ShouldPanicWith, "function is too short to patch")
 		})

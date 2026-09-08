@@ -44,11 +44,11 @@ func (n name) readVarint(off int) (int, int) {
 
 func (n name) name() (s string) {
 	if n.bytes == nil {
-		return
+		return s
 	}
 	i, l := n.readVarint(1)
 	hdr := (*_String)(unsafe.Pointer(&s))
 	hdr.Data = unsafe.Pointer(n.data(1+i, "non-empty string"))
 	hdr.Len = l
-	return
+	return s
 }

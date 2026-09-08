@@ -3,6 +3,7 @@
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to apply the Go 1.27-compatible formatter.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +26,7 @@ import (
 	"github.com/bytedance/mockey/internal/tool"
 )
 
-func NewAnalyzer(target interface{}, generic *bool, method *bool) Analyzer {
+func NewAnalyzer(target interface{}, generic, method *bool) Analyzer {
 	a := &AnalyzerImpl{
 		target:    target,
 		genericIn: generic,
@@ -64,9 +65,7 @@ func (a *AnalyzerImpl) runtimeTargetType0() reflect.Type {
 	if !a.generic {
 		return a.targetType
 	}
-	var (
-		targetIn, targetOut []reflect.Type
-	)
+	var targetIn, targetOut []reflect.Type
 	// generic information needs to be inserted at position 0
 	targetIn = []reflect.Type{genericInfoType}
 	for i := 0; i < a.targetType.NumIn(); i++ {

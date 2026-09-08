@@ -44,9 +44,7 @@ const (
 	ptrReceiverSubstr2 = ")"
 )
 
-var (
-	anonymousNameReg = regexp.MustCompile(`func\d+(\.\d+)*$`)
-)
+var anonymousNameReg = regexp.MustCompile(`func\d+(\.\d+)*$`)
 
 type NameAnalyzer struct {
 	// fullName name from runtime.FuncForPC

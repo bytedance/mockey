@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 for Go 1.27 lint compatibility.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -483,7 +484,7 @@ func TestGetMethod_NilPointer(t *testing.T) {
 			convey.So(obj.Foo(), convey.ShouldEqual, "nil pointer")
 		})
 		PatchConvey("nested nil pointer", func() {
-			var obj = &testNilPointerOuter{}
+			obj := &testNilPointerOuter{}
 			Mock(GetMethod(obj, "Foo")).Return("nested pointer").Build()
 			convey.So(obj.Foo(), convey.ShouldEqual, "nested pointer")
 		})

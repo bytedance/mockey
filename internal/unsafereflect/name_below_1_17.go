@@ -3,6 +3,7 @@
 
 /*
  * Copyright 2023 ByteDance Inc.
+ * Modified in 2026 for Go 1.27 lint compatibility.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +31,7 @@ type name struct {
 
 func (n name) name() (s string) {
 	if n.bytes == nil {
-		return
+		return s
 	}
 	b := (*[4]byte)(unsafe.Pointer(n.bytes))
 

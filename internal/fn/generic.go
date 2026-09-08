@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to apply the Go 1.27-compatible formatter.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +22,7 @@ import (
 	"unsafe"
 )
 
-var (
-	genericInfoType = reflect.TypeOf(GenericInfo(0))
-)
+var genericInfoType = reflect.TypeOf(GenericInfo(0))
 
 type GenericInfo uintptr
 

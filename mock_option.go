@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to satisfy the current formatter.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,12 +30,12 @@ func OptUnsafe(o *mockOption) {
 }
 
 func OptGeneric(o *mockOption) {
-	var t = true
+	t := true
 	o.generic = &t
 }
 
 func OptMethod(o *mockOption) {
-	var t = true
+	t := true
 	o.method = &t
 }
 
