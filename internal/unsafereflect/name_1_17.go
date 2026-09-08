@@ -1,8 +1,9 @@
-//go:build go1.17 && !go1.27
-// +build go1.17,!go1.27
+//go:build go1.17 && !go1.28
+// +build go1.17,!go1.28
 
 /*
  * Copyright 2023 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,11 +44,11 @@ func (n name) readVarint(off int) (int, int) {
 
 func (n name) name() (s string) {
 	if n.bytes == nil {
-		return
+		return s
 	}
 	i, l := n.readVarint(1)
 	hdr := (*_String)(unsafe.Pointer(&s))
 	hdr.Data = unsafe.Pointer(n.data(1+i, "non-empty string"))
 	hdr.Len = l
-	return
+	return s
 }

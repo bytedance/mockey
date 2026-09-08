@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to distinguish original-function stack-growth retries.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -218,7 +219,7 @@ func (mocker *Mocker) build() {
 	mocker.proxy = reflect.New(mocker.builder.runtimeTargetType())
 
 	originExec = func(args []reflect.Value) []reflect.Value {
-		return tool.ReflectCall(mocker.proxy.Elem(), args)
+		return mocker.callOriginal(mocker.proxy.Elem(), args)
 	}
 
 	if originPtr := mocker.builder.originPtr; originPtr != nil {
@@ -226,7 +227,7 @@ func (mocker *Mocker) build() {
 		originType := reflect.TypeOf(originPtr).Elem()
 		adapter := mocker.builder.analyzer.ReversedInputAdapter("origin", originType)
 		origin.Set(reflect.MakeFunc(originType, func(args []reflect.Value) []reflect.Value {
-			return tool.ReflectCall(mocker.proxy.Elem(), adapter(args, extraArgsGetter()))
+			return mocker.callOriginal(mocker.proxy.Elem(), adapter(args, extraArgsGetter()))
 		}))
 	}
 
@@ -253,6 +254,9 @@ func (mocker *Mocker) build() {
 	}
 
 	mockerHook := reflect.MakeFunc(mocker.builder.runtimeTargetType(), func(args []reflect.Value) []reflect.Value {
+		if invocation := mocker.originalStackRetry(); invocation != nil {
+			return mocker.resumeOriginal(invocation, args)
+		}
 		if mocker.builder.originPtr != nil {
 			// Origin call need extra args, which only can be obtained during the execution of mockerHook.
 			extraArgsGetter = func() []reflect.Value { return args }

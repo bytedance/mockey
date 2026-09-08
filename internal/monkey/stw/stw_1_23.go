@@ -1,8 +1,9 @@
-//go:build go1.23 && !go1.27
-// +build go1.23,!go1.27
+//go:build go1.23 && !go1.28
+// +build go1.23,!go1.28
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,10 +40,14 @@ type stwReason uint8
 // worldStop provides context from the stop-the-world required by the
 // start-the-world.
 type worldStop struct {
-	reason           stwReason
-	startedStopping  int64
+	//lint:ignore U1000 Required by the runtime.worldStop ABI.
+	reason stwReason
+	//lint:ignore U1000 Required by the runtime.worldStop ABI.
+	startedStopping int64
+	//lint:ignore U1000 Required by the runtime.worldStop ABI.
 	finishedStopping int64
-	stoppingCPUTime  int64
+	//lint:ignore U1000 Required by the runtime.worldStop ABI.
+	stoppingCPUTime int64
 }
 
 var (

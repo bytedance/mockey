@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 for Go 1.27 lint compatibility.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,7 +58,7 @@ func NewFuncTypeByInsertIn(ft reflect.Type, newInTypes ...reflect.Type) reflect.
 	return reflect.FuncOf(inTypes, outTypes, ft.IsVariadic())
 }
 
-func NewFuncTypeByReplaceIn(ft reflect.Type, newInType reflect.Type, newInIndex int) reflect.Type {
+func NewFuncTypeByReplaceIn(ft, newInType reflect.Type, newInIndex int) reflect.Type {
 	inTypes := make([]reflect.Type, ft.NumIn())
 	for i := 0; i < ft.NumIn(); i++ {
 		if i == newInIndex {
@@ -76,7 +77,7 @@ func NewFuncTypeByReplaceIn(ft reflect.Type, newInType reflect.Type, newInIndex 
 func MakeEmptyInArgs(ft reflect.Type) []reflect.Value {
 	args := make([]reflect.Value, ft.NumIn())
 	for i := range args {
-		args[i] = MakeEmtpy(ft.In(i))
+		args[i] = MakeEmpty(ft.In(i))
 	}
 	return args
 }
@@ -84,12 +85,12 @@ func MakeEmptyInArgs(ft reflect.Type) []reflect.Value {
 func MakeEmptyOutArgs(ft reflect.Type) []reflect.Value {
 	args := make([]reflect.Value, ft.NumOut())
 	for i := range args {
-		args[i] = MakeEmtpy(ft.Out(i))
+		args[i] = MakeEmpty(ft.Out(i))
 	}
 	return args
 }
 
-func MakeEmtpy(typ reflect.Type) reflect.Value {
+func MakeEmpty(typ reflect.Type) reflect.Value {
 	switch typ.Kind() {
 	case reflect.Ptr:
 		return reflect.New(typ.Elem())

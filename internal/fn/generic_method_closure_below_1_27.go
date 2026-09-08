@@ -1,6 +1,8 @@
+//go:build go1.20 && !go1.27
+// +build go1.20,!go1.27
+
 /*
- * Copyright 2022 ByteDance Inc.
- * Modified in 2026 to satisfy the current formatter.
+ * Copyright 2026 ByteDance Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,38 +17,6 @@
  * limitations under the License.
  */
 
-package mockey
+package fn
 
-type mockOption struct {
-	unsafe  bool
-	generic *bool
-	method  *bool
-}
-
-type mockOptionFn func(*mockOption)
-
-func OptUnsafe(o *mockOption) {
-	o.unsafe = true
-}
-
-func OptGeneric(o *mockOption) {
-	t := true
-	o.generic = &t
-}
-
-func OptMethod(o *mockOption) {
-	t := true
-	o.method = &t
-}
-
-func resolveMockOpt(fn ...mockOptionFn) *mockOption {
-	opt := &mockOption{
-		unsafe:  false,
-		generic: nil,
-		method:  nil,
-	}
-	for _, f := range fn {
-		f(opt)
-	}
-	return opt
-}
+func (a *AnalyzerImpl) initGenericMethodClosure() {}

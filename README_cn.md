@@ -100,6 +100,7 @@ func TestWin(t *testing.T) {
 
 ### 版本支持
 - Go 1.13+
+- 核心包支持 Go 1.27，包括泛型方法和 race 检测。支持范围与限制见 [Go 1.27 适配说明](docs/go1.27-compatibility.md)。
 
 ## 基础特性
 ### 简单函数/方法

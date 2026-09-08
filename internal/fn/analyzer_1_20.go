@@ -1,8 +1,9 @@
-//go:build go1.20 && !go1.27
-// +build go1.20,!go1.27
+//go:build go1.20 && !go1.28
+// +build go1.20,!go1.28
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +26,7 @@ import (
 	"github.com/bytedance/mockey/internal/tool"
 )
 
-func NewAnalyzer(target interface{}, generic *bool, method *bool) Analyzer {
+func NewAnalyzer(target interface{}, generic, method *bool) Analyzer {
 	a := &AnalyzerImpl{
 		target:    target,
 		genericIn: generic,
@@ -47,6 +48,7 @@ type AnalyzerImpl struct {
 	runtimeTargetType  reflect.Type
 	runtimeTargetValue reflect.Value
 	runtimeGenericInfo GenericInfo
+	genericClosure     *genericMethodClosure
 }
 
 // init initializes the AnalyzerImpl. If `a.genericIn` or `a.methodIn` is set, it will be used directly, else it will be
@@ -55,6 +57,7 @@ func (a *AnalyzerImpl) init() *AnalyzerImpl {
 	tool.DebugPrintf("[Analyzer.init] start analyze, genericIn: %v, methodIn: %v\n", a.genericIn, a.methodIn)
 	a.targetValue, a.targetType = reflect.ValueOf(a.target), reflect.TypeOf(a.target)
 	tool.DebugPrintf("[Analyzer.init] targetType: %v, targetValue: 0x%x\n", a.targetType, a.targetValue.Pointer())
+	a.initGenericMethodClosure()
 	a.generic, a.method = a.isGeneric0(), a.isMethod0()
 	a.runtimeTargetType = a.runtimeTargetType0()
 	a.runtimeTargetValue, a.runtimeGenericInfo = a.runtimeTargetValueAndGenericInfo0()
@@ -69,7 +72,7 @@ func (a *AnalyzerImpl) isGeneric0() bool {
 	if a.nameAnalyzer == nil {
 		a.nameAnalyzer = NewNameAnalyzerByValue(a.targetValue)
 	}
-	return a.nameAnalyzer.IsGeneric()
+	return a.genericClosure != nil || a.nameAnalyzer.IsGeneric()
 }
 
 func (a *AnalyzerImpl) isMethod0() bool {
@@ -78,6 +81,10 @@ func (a *AnalyzerImpl) isMethod0() bool {
 	}
 	if a.nameAnalyzer == nil {
 		a.nameAnalyzer = NewNameAnalyzerByValue(a.targetValue)
+	}
+
+	if a.genericClosure != nil {
+		return true
 	}
 
 	// Analyze whether the function is a method.
@@ -125,7 +132,9 @@ func (a *AnalyzerImpl) runtimeTargetType0() reflect.Type {
 		targetInShift int
 		targetOut     []reflect.Type
 	)
-	if a.method {
+	if a.genericClosure != nil && a.genericClosure.bound {
+		targetIn = []reflect.Type{a.genericClosure.receiver, genericInfoType}
+	} else if a.method {
 		// for methods, generic information needs to be inserted at position 1 after go1.20
 		targetIn = []reflect.Type{a.targetType.In(0), genericInfoType}
 		targetInShift = 1
@@ -211,6 +220,18 @@ func (a *AnalyzerImpl) nonGenericAnalyzer(inputName string, inputType reflect.Ty
 
 func (a *AnalyzerImpl) genericAnalyzer(inputName string, inputType reflect.Type) (fn, reversedFn) {
 	targetType := a.RuntimeTargetType()
+
+	if a.genericClosure != nil && a.genericClosure.bound {
+		if inputType.NumIn() > 0 && inputType.In(0) == genericInfoType && tool.CheckFuncArgs(targetType, inputType, 2, 1) {
+			return func(args []reflect.Value) []reflect.Value { return args[1:] },
+				func(args, extra []reflect.Value) []reflect.Value { return append([]reflect.Value{extra[0]}, args...) }
+		}
+		tool.Assert(tool.CheckFuncArgs(targetType, inputType, 2, 0), "args not match: target: %v, %s: %v", a.TargetType(), inputName, inputType)
+		return func(args []reflect.Value) []reflect.Value { return args[2:] },
+			func(args, extra []reflect.Value) []reflect.Value {
+				return append([]reflect.Value{extra[0], extra[1]}, args...)
+			}
+	}
 
 	// check function:
 	// 		a. generic function: func(inArgs) outArgs

@@ -1,8 +1,9 @@
-//go:build !go1.27
-// +build !go1.27
+//go:build !go1.28
+// +build !go1.28
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +23,6 @@
 package linkname
 
 import (
-	"reflect"
 	"runtime"
 	"unsafe"
 )
@@ -45,8 +45,13 @@ func init() {
 	textStart := *(*uintptr)(unsafe.Pointer(uintptr(md) + uintptr(textOffset)))
 	funcTabStart := *(**functab)(unsafe.Pointer(uintptr(md) + uintptr(funcTabOffset)))
 	funcTabSize := *(*int)(unsafe.Pointer(uintptr(md) + uintptr(funcTabOffset) + unsafe.Sizeof(uintptr(0))))
-	header := reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(funcTabStart)),
+	// Keep the data pointer visible to the garbage collector while building the slice.
+	header := struct {
+		Data *functab
+		Len  int
+		Cap  int
+	}{
+		Data: funcTabStart,
 		Len:  funcTabSize,
 		Cap:  funcTabSize,
 	}
@@ -66,11 +71,12 @@ const (
 
 type functab struct {
 	entryoff uint32
-	funcoff  uint32
+	//lint:ignore U1000 Required by the runtime.functab ABI.
+	funcoff uint32
 }
 
 func getMainModuleData() unsafe.Pointer {
-	var f = getMainModuleData
+	f := getMainModuleData
 	entry := **(**uintptr)(unsafe.Pointer(&f))
 	_, pointer := findfunc(entry)
 	return pointer

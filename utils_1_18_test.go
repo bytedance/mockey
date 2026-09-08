@@ -3,6 +3,7 @@
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to document intentional test fields for static analysis.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +29,7 @@ import (
 )
 
 type testAG[T any] struct {
+	//lint:ignore U1000 Exercises non-empty generic receiver layouts.
 	t T
 	testCG[T]
 }
@@ -45,6 +47,7 @@ func (a *testAG[T]) BarC() {
 }
 
 type testBG[T any] struct {
+	//lint:ignore U1000 Exercises non-empty generic receiver layouts.
 	t T
 	*testCG[T]
 }
@@ -53,7 +56,10 @@ func (b testBG[T]) FooB() {}
 
 func (b *testBG[T]) BarB() {}
 
-type testCG[T any] struct{ t T }
+type testCG[T any] struct {
+	//lint:ignore U1000 Exercises non-empty generic receiver layouts.
+	t T
+}
 
 func (s testCG[T]) FooC() {
 	fmt.Print("")
@@ -64,6 +70,7 @@ func (s *testCG[T]) BarC() {
 }
 
 type testDG[T any] struct {
+	//lint:ignore U1000 Exercises non-empty generic receiver layouts.
 	t T
 	*testBG[T]
 }

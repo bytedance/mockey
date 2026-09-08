@@ -3,6 +3,7 @@
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 for Go 1.27 lint compatibility.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +131,7 @@ func TestGeneric(t *testing.T) {
 		})
 		PatchConvey("origin", func() {
 			PatchConvey("func", func() {
-				var origin = sum[float64]
+				origin := sum[float64]
 				decorator := func(a, b float64) float64 {
 					return origin(a, b) + 1
 				}
@@ -139,7 +140,7 @@ func TestGeneric(t *testing.T) {
 			})
 
 			PatchConvey("method", func() {
-				var origin = generic[string].Value2
+				origin := generic[string].Value2
 				decorator := func(a generic[string], hint string) string {
 					return "decorated " + origin(a, hint)
 				}
@@ -286,8 +287,9 @@ func TestGenericArgValues(t *testing.T) {
 					convey.So(info.UsedParamType(3), convey.ShouldEqual, reflect.TypeOf(r1))
 					convey.So(info.UsedParamType(4), convey.ShouldEqual, reflect.TypeOf(r2))
 					convey.So(info.UsedParamType(5), convey.ShouldEqual, reflect.TypeOf(r3))
-					return
-				}).Build()
+					return r1, r2, r3
+				},
+			).Build()
 			target(1, 2, "3")
 		})
 	})

@@ -1,8 +1,9 @@
-//go:build race
-// +build race
+//go:build race && !go1.27
+// +build race,!go1.27
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.

@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to preserve closure context in trampoline branches.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +22,13 @@ import "unsafe"
 func BranchTo(to uintptr) (res []byte) {
 	res = append(res, rdxMOV(to)...)         // MOVABS RDX, to
 	res = append(res, []byte{0xff, 0xe2}...) // JMP RDX
-	return
+	return res
 }
 
 func BranchInto(to uintptr) (res []byte) {
 	res = append(res, rdxMOV(to)...)         // MOVABS RDX, to
 	res = append(res, []byte{0xff, 0x22}...) // JMP [RDX]
-	return
+	return res
 }
 
 // rdxMOV moves the 64bit value to rdx register, using the following instruction:
@@ -37,4 +38,14 @@ func rdxMOV(val uintptr) []byte {
 	*(*uintptr)(unsafe.Pointer(&res[0])) = val
 	res = append([]byte{0x48, 0xba}, res...)
 	return res
+}
+
+// BranchToOriginal uses a RIP-relative indirect jump so no live Go register,
+// including the closure context in DX, changes on the way to the original.
+func BranchToOriginal(to uintptr) []byte {
+	code := []byte{0xff, 0x25, 0, 0, 0, 0}
+	for shift := uint(0); shift < 64; shift += 8 {
+		code = append(code, byte(to>>shift))
+	}
+	return code
 }

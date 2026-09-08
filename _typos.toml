@@ -2,5 +2,9 @@
 [default.extend-identifiers]
 48ba01efbc9a78563412 = "48ba01efbc9a78563412"
 
+[default.extend-words]
+# Conventional abbreviation for reflect.Type; "type" is a Go keyword.
+typ = "typ"
+
 [files]
 extend-exclude = ["go.sum", "check_branch_name.sh"]

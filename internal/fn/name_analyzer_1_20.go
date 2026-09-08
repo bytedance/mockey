@@ -1,8 +1,9 @@
-//go:build go1.20 && !go1.27
-// +build go1.20,!go1.27
+//go:build go1.20 && !go1.28
+// +build go1.20,!go1.28
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,9 +44,7 @@ const (
 	ptrReceiverSubstr2 = ")"
 )
 
-var (
-	anonymousNameReg = regexp.MustCompile(`func\d+(\.\d+)*$`)
-)
+var anonymousNameReg = regexp.MustCompile(`func\d+(\.\d+)*$`)
 
 type NameAnalyzer struct {
 	// fullName name from runtime.FuncForPC

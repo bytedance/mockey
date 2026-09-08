@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to analyze Go 1.27 generic method closures.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +18,7 @@
 package inst
 
 import (
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"unsafe"
@@ -63,11 +65,59 @@ func Disassemble(code []byte, required int, checkLen bool) int {
 	var inst arm64asm.Inst
 
 	for pos < required {
+		if pos+instLen > len(code) {
+			tool.Assert(!checkLen, "function is too short to patch")
+			// MockUnsafe explicitly permits overwriting past a short function.
+			// Its caller will save those overwritten bytes, but instruction
+			// analysis must stay within this function's metadata boundary.
+			return (required + instLen - 1) / instLen * instLen
+		}
 		inst, err = arm64asm.Decode(code[pos:])
 		tool.Assert(err == nil || !checkLen, err)
 		tool.DebugPrintf("Disassemble: %3d\t0x%x\t%v\n", pos, common.PtrOf(code)+uintptr(pos), inst)
 		tool.Assert(inst.Op != arm64asm.RET || !checkLen, "function is too short to patch")
 		pos += instLen
+	}
+	prefixEnd := pos
+	// Go 1.27 may start a stack-only leaf with a zeroing/copy loop rather
+	// than a stack-split prologue. Include any backward branch into the
+	// copied prefix, otherwise Origin jumps back into the patched entry.
+	// The unconditional retry after morestack is not an initialization loop.
+	for scan := pos; scan+instLen <= len(code); scan += instLen {
+		instruction, decodeErr := arm64asm.Decode(code[scan:])
+		if decodeErr != nil || instruction.Op == arm64asm.RET {
+			break
+		}
+		conditional := instruction.Op == arm64asm.CBNZ || instruction.Op == arm64asm.CBZ || instruction.Op == arm64asm.TBNZ || instruction.Op == arm64asm.TBZ
+		if instruction.Op == arm64asm.B {
+			_, conditional = instruction.Args[0].(arm64asm.Cond)
+		}
+		if !conditional {
+			continue
+		}
+		for _, arg := range instruction.Args {
+			if relative, ok := arg.(arm64asm.PCRel); ok {
+				destination := scan + int(relative)
+				if destination >= 0 && destination < pos {
+					pos = scan + instLen
+				}
+			}
+		}
+	}
+	// Relative references in newly copied instructions must stay within the
+	// copied block. Relocating calls and literal/address loads is not supported
+	// by the trampoline; reject them rather than emitting an invalid Origin.
+	for scan := prefixEnd; scan < pos; scan += instLen {
+		instruction, decodeErr := arm64asm.Decode(code[scan:])
+		tool.Assert(decodeErr == nil, decodeErr)
+		for _, arg := range instruction.Args {
+			if relative, ok := arg.(arm64asm.PCRel); ok {
+				destination := scan + int(relative)
+				branch := instruction.Op == arm64asm.B || instruction.Op == arm64asm.CBNZ || instruction.Op == arm64asm.CBZ || instruction.Op == arm64asm.TBNZ || instruction.Op == arm64asm.TBZ
+				tool.Assert(branch && destination >= 0 && destination < pos,
+					"cannot relocate instruction in initialization loop: %v", instruction)
+			}
+		}
 	}
 	return pos
 }
@@ -209,8 +259,8 @@ func (g *genericInfoInst) calcGenericInfoAddr() uintptr {
 	adrpReg := adrpInst.Args[0].(arm64asm.Reg)
 	adrpRes := (g.adrp.addr &^ 0xFFF) + uintptr(adrpInst.Args[1].(arm64asm.PCRel))
 	addInst := g.add.inst
-	tool.Assert(addInst.Args[0].(arm64asm.RegSP) == (arm64asm.RegSP)(adrpReg), "invalid addInst: %v", addInst)
-	tool.Assert(addInst.Args[1].(arm64asm.RegSP) == (arm64asm.RegSP)(adrpReg), "invalid addInst: %v", addInst)
+	tool.Assert(addInst.Args[0].(arm64asm.RegSP) == arm64asm.RegSP(adrpReg), "invalid addInst: %v", addInst)
+	tool.Assert(addInst.Args[1].(arm64asm.RegSP) == arm64asm.RegSP(adrpReg), "invalid addInst: %v", addInst)
 	addImmShift0 := addInst.Args[2].(arm64asm.ImmShift)
 	type immShift struct {
 		imm   uint16
@@ -220,4 +270,107 @@ func (g *genericInfoInst) calcGenericInfoAddr() uintptr {
 	tool.Assert(addImmShift.shift == 0, "invalid addInst: %v", addInst)
 	addRes := adrpRes + uintptr(addImmShift.imm)
 	return addRes
+}
+
+// GenericClosureCaptureOffset returns the last captured word loaded by a
+// compiler-generated closure. Go 1.27 captures a generic method's dictionary
+// after its optional bound receiver. Only inspect the wrapper before RET.
+func GenericClosureCaptureOffset(addr uintptr, maxScan int) uintptr {
+	code := common.BytesOf(addr, maxScan)
+	var offset uintptr
+	for pos := 0; pos < maxScan; pos += instLen {
+		instruction, err := arm64asm.Decode(code[pos:])
+		tool.Assert(err == nil, err)
+		if instruction.Op == arm64asm.RET {
+			return offset
+		}
+		if instruction.Op == arm64asm.BL {
+			jump := newGenericJmpInst(addr, pos, instruction)
+			if !jump.isExtraCall {
+				return offset
+			}
+		}
+		if instruction.Op != arm64asm.LDR && instruction.Op != arm64asm.LDUR {
+			continue
+		}
+		mem, ok := instruction.Args[1].(arm64asm.MemImmediate)
+		if !ok || mem.Base != arm64asm.RegSP(arm64asm.X26) || mem.Mode != arm64asm.AddrOffset {
+			continue
+		}
+		// arm64asm deliberately keeps the displacement private.
+		type memImmediate struct {
+			base arm64asm.RegSP
+			mode arm64asm.AddrMode
+			imm  int32
+		}
+		displacement := (*memImmediate)(unsafe.Pointer(&mem)).imm
+		if displacement > 0 && uintptr(displacement) > offset {
+			offset = uintptr(displacement)
+		}
+	}
+	return offset
+}
+
+// RelocateBranches preserves branch targets when a prologue is copied into
+// the Origin trampoline. External branches use nearby absolute-jump stubs.
+func RelocateBranches(code []byte, original uintptr, prefixEnd, stubOffset int) {
+	for pos := 0; pos < prefixEnd; pos += instLen {
+		instruction, err := arm64asm.Decode(code[pos:prefixEnd])
+		tool.Assert(err == nil, err)
+		if instruction.Op == arm64asm.RET {
+			return
+		}
+		for _, argument := range instruction.Args {
+			relative, ok := argument.(arm64asm.PCRel)
+			if !ok {
+				continue
+			}
+			targetOffset := pos + int(relative)
+			if instruction.Op == arm64asm.ADR || instruction.Op == arm64asm.ADRP {
+				// Replace address generation with a PC-relative load of the
+				// absolute address. The literal stays close to the trampoline
+				// even when mmap is more than 4 GiB from the original text.
+				address := original + uintptr(targetOffset)
+				if instruction.Op == arm64asm.ADRP {
+					address = (original+uintptr(pos))&^0xfff + uintptr(relative)
+				}
+				stubOffset = (stubOffset + 7) &^ 7
+				tool.Assert(stubOffset+8 <= len(code), "trampoline literals exceed page size")
+				register := uint32(instruction.Args[0].(arm64asm.Reg) - arm64asm.X0)
+				encoding := uint32(0x58000000) | uint32((stubOffset-pos)/instLen)<<5 | register
+				binary.LittleEndian.PutUint32(code[pos:], encoding)
+				binary.LittleEndian.PutUint64(code[stubOffset:], uint64(address))
+				stubOffset += 8
+				continue
+			}
+			var shift, width uint
+			switch instruction.Op {
+			case arm64asm.B:
+				shift, width = 0, 26
+				if _, conditional := instruction.Args[0].(arm64asm.Cond); conditional {
+					shift, width = 5, 19
+				}
+			case arm64asm.BL:
+				shift, width = 0, 26
+			case arm64asm.CBZ, arm64asm.CBNZ:
+				shift, width = 5, 19
+			case arm64asm.TBZ, arm64asm.TBNZ:
+				shift, width = 5, 14
+			default:
+				tool.Assert(false, "cannot relocate PC-relative data instruction: %v", instruction)
+			}
+			if targetOffset >= 0 && targetOffset < prefixEnd {
+				continue
+			}
+			stub := BranchToOriginal(original + uintptr(targetOffset))
+			tool.Assert(stubOffset+len(stub) <= len(code), "trampoline branch stubs exceed page size")
+			displacement := int32((stubOffset - pos) / instLen)
+			tool.Assert(displacement >= -(1<<(width-1)) && displacement < 1<<(width-1), "trampoline branch is out of range")
+			mask := uint32((1<<width)-1) << shift
+			encoding := instruction.Enc&^mask | (uint32(displacement) << shift & mask)
+			binary.LittleEndian.PutUint32(code[pos:], encoding)
+			copy(code[stubOffset:], stub)
+			stubOffset += len(stub)
+		}
+	}
 }

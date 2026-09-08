@@ -3,6 +3,7 @@
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,10 +41,9 @@ func SuspendSysmon() (resume func()) {
 	usleep(100)
 
 	// Construct resume function
-	resume = func() {
+	return func() {
 		unlock(sysmonLockPtr)
 	}
-	return
 }
 
 // getSysmonLockOffset Get the sysmon lock offset for the current Go version

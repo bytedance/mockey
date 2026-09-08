@@ -1,55 +1,60 @@
 name: Pull Request Check
 
-on: [ pull_request ]
+on:
+  pull_request:
+  push:
+    branches: [feature/go1.27-runtime]
 
 jobs:
   compliant:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Check License Header
-        uses: apache/skywalking-eyes/header@v0.4.0
+        uses: apache/skywalking-eyes/header@v0.7.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Check Spell
-        uses: crate-ci/typos@master
+        # Use pinned CLI releases because the upstream action policy restricts
+        # third-party action wrappers. Keep the spelling check and config.
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/crate-ci/typos/releases/download/v1.35.7/typos-v1.35.7-x86_64-unknown-linux-musl.tar.gz \
+            --output "$RUNNER_TEMP/typos.tar.gz"
+          echo "e45305520ae975c92d5636b26f26f91f76cc4121f0b7ea3c8897bda807ff8f52  $RUNNER_TEMP/typos.tar.gz" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/typos-bin"
+          tar -xzf "$RUNNER_TEMP/typos.tar.gz" -C "$RUNNER_TEMP/typos-bin"
+          "$RUNNER_TEMP/typos-bin/typos"
 
   staticcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.19
-      - uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: reviewdog-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            reviewdog-${{ runner.os }}-go-
-      - uses: reviewdog/action-staticcheck@v1
-        with:
-          github_token: ${{ secrets.github_token }}
-          # Change reviewdog reporter if you need [github-pr-check,github-check,github-pr-review].
-          reporter: github-pr-review
-          # Report all results.
-          filter_mode: nofilter
-          # Exit with 1 when it find at least one finding.
-          fail_on_error: true
-          # Set staticcheck flags
-          staticcheck_flags: -checks=inherit,-SA1029
+          go-version: "1.27.x"
+      - name: Staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+          staticcheck -checks=inherit,-SA1029 ./...
 
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.19
+          go-version: "1.27.x"
       - name: Golangci Lint
         # https://golangci-lint.run/
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/golangci-lint.tar.gz"
+          echo "2277d43b98ec0054280f2ac26b53268bae97682444678a59a657dd565da021d6  $RUNNER_TEMP/golangci-lint.tar.gz" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/golangci-lint-bin"
+          tar -xzf "$RUNNER_TEMP/golangci-lint.tar.gz" -C "$RUNNER_TEMP/golangci-lint-bin" --strip-components=1
+          "$RUNNER_TEMP/golangci-lint-bin/golangci-lint" config verify
+          "$RUNNER_TEMP/golangci-lint-bin/golangci-lint" run --timeout=5m

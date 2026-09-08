@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 for Go 1.27 lint compatibility.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +47,7 @@ func GetMethod(instance interface{}, methodName string, opt ...methodOptionFn) (
 
 func getMethod(val reflect.Value, methodName string, opts *methodOption) (method reflect.Value, ok bool) {
 	if !val.IsValid() {
-		return
+		return method, ok
 	}
 	typ := val.Type()
 	kind := typ.Kind()
@@ -58,7 +59,7 @@ func getMethod(val reflect.Value, methodName string, opts *methodOption) (method
 			if m, ok := typ.MethodByName(methodName); ok {
 				return m.Func, true
 			}
-			return
+			return method, ok
 		}
 		typ = val.Type()
 		kind = typ.Kind()
@@ -98,7 +99,7 @@ func getMethod(val reflect.Value, methodName string, opts *methodOption) (method
 	if m, ok := unexportedMethodByName(ptrType, methodName, opts); ok {
 		return m, true
 	}
-	return
+	return method, ok
 }
 
 // getFieldMethod gets a functional field's value as an instance
@@ -116,12 +117,12 @@ func getMethod(val reflect.Value, methodName string, opts *methodOption) (method
 // points to the anonymous function in NewFoo
 func getFieldMethod(v reflect.Value, fieldName string) (res reflect.Value, ok bool) {
 	if v.Kind() != reflect.Struct {
-		return
+		return res, ok
 	}
 
 	field := v.FieldByName(fieldName)
 	if !field.IsValid() || field.Kind() != reflect.Func {
-		return
+		return res, ok
 	}
 	return fn.MakeFunc(field.Type(), field.Pointer()), true
 }
@@ -183,11 +184,11 @@ func getNestedMethod(val reflect.Value, methodName string) (reflect.Method, bool
 // unexportedMethodByName resolve an unexported method from an instance
 func unexportedMethodByName(instanceType reflect.Type, methodName string, opts *methodOption) (res reflect.Value, ok bool) {
 	if ch0 := methodName[0]; ch0 >= 'A' && ch0 <= 'Z' {
-		return
+		return res, ok
 	}
 	typ, tfn, ok := unsafereflect.MethodByName(instanceType, methodName)
 	if !ok {
-		return
+		return res, ok
 	}
 	tool.Assert(typ != nil || opts.unexportedTargetType != nil, "failed to determine %v's type, please use `OptUnexportedTargetType` to specify", methodName)
 
