@@ -237,6 +237,13 @@ func RelocateBranches(code []byte, original uintptr, prefixEnd, stubOffset int) 
 		if instruction.Op == x86asm.RET {
 			return
 		}
+		if instruction.Op == x86asm.LEA {
+			if address, ok := instruction.Args[1].(x86asm.Mem); ok {
+				// x86asm does not mark address-size-prefixed EIP references
+				// as PC-relative. Copying one unchanged would use the proxy PC.
+				tool.Assert(address.Base != x86asm.EIP, "cannot relocate EIP-relative LEA: %v", instruction)
+			}
+		}
 		if relative, ok := instruction.Args[0].(x86asm.Rel); ok {
 			targetOffset := pos + instruction.Len + int(relative)
 			if targetOffset < 0 || targetOffset >= prefixEnd {
@@ -256,11 +263,24 @@ func RelocateBranches(code []byte, original uintptr, prefixEnd, stubOffset int) 
 				stubOffset += len(stub)
 			}
 		} else if instruction.PCRel != 0 {
-			// RIP-relative data references cannot use a branch island. Keep
-			// them only when their relocated signed displacement still fits.
+			// Address generation can load an absolute address from a nearby
+			// literal when the trampoline is outside the original disp32 range.
+			// Other data references must retain their signed displacement.
 			tool.Assert(instruction.PCRel == 4, "unsupported PC-relative instruction: %v", instruction)
 			old := int64(int32(binary.LittleEndian.Uint32(code[pos+instruction.PCRelOff:])))
 			displacement := old + int64(original) - int64(common.PtrOf(code))
+			if displacement != int64(int32(displacement)) && instruction.Op == x86asm.LEA {
+				address, ok := instruction.Args[1].(x86asm.Mem)
+				tool.Assert(ok && instruction.AddrSize == 64 && address.Base == x86asm.RIP && address.Segment == 0,
+					"cannot relocate PC-relative LEA: %v", instruction)
+				tool.Assert(stubOffset >= prefixEnd && stubOffset <= len(code)-8, "trampoline literals exceed page size")
+				// LEA and MOV share ModRM and register/operand-size prefixes.
+				// Replacing the opcode preserves flags and needs no scratch register.
+				code[pos+instruction.PCRelOff-2] = 0x8b
+				binary.LittleEndian.PutUint64(code[stubOffset:], uint64(original+uintptr(pos+instruction.Len)+uintptr(old)))
+				displacement = int64(stubOffset - pos - instruction.Len)
+				stubOffset += 8
+			}
 			tool.Assert(displacement == int64(int32(displacement)), "PC-relative data reference is out of trampoline range: %v", instruction)
 			binary.LittleEndian.PutUint32(code[pos+instruction.PCRelOff:], uint32(int32(displacement)))
 		}
