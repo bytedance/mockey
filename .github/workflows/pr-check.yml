@@ -15,7 +15,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Check Spell
-        uses: crate-ci/typos@master
+        # Use pinned CLI releases because the upstream action policy restricts
+        # third-party action wrappers. Keep the spelling check and config.
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/crate-ci/typos/releases/download/v1.35.7/typos-v1.35.7-x86_64-unknown-linux-musl.tar.gz \
+            --output "$RUNNER_TEMP/typos.tar.gz"
+          echo "e45305520ae975c92d5636b26f26f91f76cc4121f0b7ea3c8897bda807ff8f52  $RUNNER_TEMP/typos.tar.gz" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/typos-bin"
+          tar -xzf "$RUNNER_TEMP/typos.tar.gz" -C "$RUNNER_TEMP/typos-bin"
+          "$RUNNER_TEMP/typos-bin/typos"
 
   staticcheck:
     runs-on: ubuntu-latest
@@ -40,6 +49,12 @@ jobs:
           go-version: "1.27.x"
       - name: Golangci Lint
         # https://golangci-lint.run/
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: v2.13.2
+        run: |
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/golangci/golangci-lint/releases/download/v2.13.2/golangci-lint-2.13.2-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/golangci-lint.tar.gz"
+          echo "2277d43b98ec0054280f2ac26b53268bae97682444678a59a657dd565da021d6  $RUNNER_TEMP/golangci-lint.tar.gz" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/golangci-lint-bin"
+          tar -xzf "$RUNNER_TEMP/golangci-lint.tar.gz" -C "$RUNNER_TEMP/golangci-lint-bin" --strip-components=1
+          "$RUNNER_TEMP/golangci-lint-bin/golangci-lint" config verify
+          "$RUNNER_TEMP/golangci-lint-bin/golangci-lint" run --timeout=5m
