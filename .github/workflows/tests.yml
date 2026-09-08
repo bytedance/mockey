@@ -1,9 +1,13 @@
 name: Tests
 
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches: [feature/go1.27-runtime]
 
 jobs:
   unit-benchmark-test:
+    if: github.event_name == 'pull_request'
     strategy:
       matrix:
         go: [
@@ -19,24 +23,21 @@ jobs:
           ]
         os: [linux] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
         arch: [X64, ARM64]
-        exclude:
-          - os: Linux
-            arch: ARM64
-          - os: Windows
-            arch: ARM64
     runs-on: ["${{ matrix.os }}", "${{ matrix.arch }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
+          cache: false
       - name: Unit Test
         run: MOCKEY_DEBUG=true go test -gcflags="all=-l -N" -race -timeout 30s -count 1 ./...
       - name: Benchmark
         run: go test -gcflags="all=-l -N" -bench=. -benchmem -run=none ./...
 
   unit-benchmark-test-no-race: # some go version -race has fatal issues
+    if: github.event_name == 'pull_request'
     strategy:
       matrix:
         go: [
@@ -48,31 +49,60 @@ jobs:
           ]
         os: [linux] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
         arch: [X64, ARM64]
-        exclude:
-          - os: Linux
-            arch: ARM64
-          - os: Windows
-            arch: ARM64
     runs-on: ["${{ matrix.os }}", "${{ matrix.arch }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
+          cache: false
       - name: Unit Test
         run: MOCKEY_DEBUG=true go test -gcflags="all=-l -N" -timeout 30s -count 1 ./...
       - name: Benchmark
         run: go test -gcflags="all=-l -N" -bench=. -benchmem -run=none ./...
   unit-benchmark-test-no-suspend-runtime:
+    strategy:
+      matrix:
+        go: ["1.26", "1.27.x"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: "1.26"
+          go-version: ${{ matrix.go }}
       - name: Unit Test
         run: MOCKEY_DEBUG=true go test -gcflags="all=-l -N" -timeout 30s -count 1 -tags mockey_disable_ss,mockey_disable_stw ./...
       - name: Benchmark
+        run: go test -gcflags="all=-l -N" -bench=. -benchmem -run=none ./...
+
+  go127:
+    name: Go 1.27 / ${{ matrix.runner }} / race=${{ matrix.race }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2022]
+        race: [false, true]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+      - name: Unit Test
+        env:
+          MOCKEY_DEBUG: "true"
+          TEST_RACE: ${{ matrix.race }}
+        run: |
+          race_flag=
+          if [ "$TEST_RACE" = true ]; then race_flag=-race; fi
+          go test -gcflags="all=-l -N" $race_flag -timeout 90s -count 1 ./...
+      - name: Benchmark
+        if: ${{ !matrix.race }}
         run: go test -gcflags="all=-l -N" -bench=. -benchmem -run=none ./...
