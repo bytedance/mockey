@@ -98,6 +98,7 @@ func TestWin(t *testing.T) {
 
 ### Version Support 
 - Go 1.13+
+- Go 1.27 core support includes generic methods and race instrumentation. See the [supported forms and limitations](docs/go1.27-compatibility.md).
 
 ## Basic Features
 ### Simple function/method
