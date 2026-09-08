@@ -1,8 +1,9 @@
-//go:build !mockey_disable_ss && go1.23 && !go1.27
-// +build !mockey_disable_ss,go1.23,!go1.27
+//go:build !mockey_disable_ss && go1.23 && !go1.28
+// +build !mockey_disable_ss,go1.23,!go1.28
 
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
