@@ -1,5 +1,6 @@
 /*
  * Copyright 2022 ByteDance Inc.
+ * Modified in 2026 to support Go 1.27.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,12 +111,15 @@ func (a *AnalyzerImpl) runtimeTargetValueAndGenericInfo0() (reflect.Value, Gener
 	if !a.IsGeneric() {
 		return a.TargetValue(), 0
 	}
+	if target, info, ok := a.genericClosureRuntimeTarget(); ok {
+		return target, info
+	}
 	tool.DebugPrintf("[Analyzer.init] try to analyze generic\n")
 	atomic.AddInt64(&genericAnalyzedCount, 1)
 	// Obtain the jump address and generic information address of the generic function through instruction analysis
 	jumpAddr, genericInfoAddr := inst.GetGenericAddr(a.TargetValue().Pointer(), 10000)
 	// Create a function value based on the runtime type and the obtained jump address
-	runtimeTarget, genericInfo := monkeyFn.MakeFunc(a.RuntimeTargetType(), jumpAddr), (GenericInfo)(genericInfoAddr)
+	runtimeTarget, genericInfo := monkeyFn.MakeFunc(a.RuntimeTargetType(), jumpAddr), GenericInfo(genericInfoAddr)
 
 	// Fallback genericInfo: obtains generic information by means of actual execution
 	if genericInfo == 0 {
