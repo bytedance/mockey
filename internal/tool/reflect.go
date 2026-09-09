@@ -22,19 +22,11 @@ import (
 
 func ReflectCall(f reflect.Value, args []reflect.Value) []reflect.Value {
 	if f.Type().IsVariadic() {
-		newArgs := make([]reflect.Value, 0)
-		lastArg := args[len(args)-1]
-		for i := 0; i < len(args)-1; i++ {
-			newArgs = append(newArgs, args[i])
-		}
-
-		for i := 0; i < lastArg.Len(); i++ {
-			newArgs = append(newArgs, lastArg.Index(i))
-		}
-		return f.Call(newArgs)
-	} else {
-		return f.Call(args)
+		// MakeFunc supplies the variadic arguments as a slice. Forward it
+		// unchanged to preserve nil, capacity and the shared backing array.
+		return f.CallSlice(args)
 	}
+	return f.Call(args)
 }
 
 func NewFuncTypeByOut(ft reflect.Type, newOutTypes ...reflect.Type) reflect.Type {
@@ -57,7 +49,7 @@ func NewFuncTypeByInsertIn(ft reflect.Type, newInTypes ...reflect.Type) reflect.
 	return reflect.FuncOf(inTypes, outTypes, ft.IsVariadic())
 }
 
-func NewFuncTypeByReplaceIn(ft reflect.Type, newInType reflect.Type, newInIndex int) reflect.Type {
+func NewFuncTypeByReplaceIn(ft, newInType reflect.Type, newInIndex int) reflect.Type {
 	inTypes := make([]reflect.Type, ft.NumIn())
 	for i := 0; i < ft.NumIn(); i++ {
 		if i == newInIndex {
