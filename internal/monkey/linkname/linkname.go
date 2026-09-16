@@ -22,7 +22,6 @@
 package linkname
 
 import (
-	"reflect"
 	"runtime"
 	"unsafe"
 )
@@ -45,12 +44,7 @@ func init() {
 	textStart := *(*uintptr)(unsafe.Pointer(uintptr(md) + uintptr(textOffset)))
 	funcTabStart := *(**functab)(unsafe.Pointer(uintptr(md) + uintptr(funcTabOffset)))
 	funcTabSize := *(*int)(unsafe.Pointer(uintptr(md) + uintptr(funcTabOffset) + unsafe.Sizeof(uintptr(0))))
-	header := reflect.SliceHeader{
-		Data: uintptr(unsafe.Pointer(funcTabStart)),
-		Len:  funcTabSize,
-		Cap:  funcTabSize,
-	}
-	funcTabs := *(*[]functab)(unsafe.Pointer(&header))
+	funcTabs := unsafe.Slice(funcTabStart, funcTabSize)
 	for _, tab := range funcTabs {
 		pc := textStart + uintptr(tab.entryoff)
 		fun := runtime.FuncForPC(pc)
@@ -66,7 +60,7 @@ const (
 
 type functab struct {
 	entryoff uint32
-	funcoff  uint32
+	_        uint32 // funcoff
 }
 
 func getMainModuleData() unsafe.Pointer {

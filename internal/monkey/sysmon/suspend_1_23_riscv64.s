@@ -1,3 +1,6 @@
+//go:build !mockey_disable_ss && go1.23 && !go1.27
+// +build !mockey_disable_ss,go1.23,!go1.27
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -14,37 +17,11 @@
  * limitations under the License.
  */
 
-package tool
+#include "textflag.h"
 
-import (
-	"reflect"
-	"unsafe"
-
-	"golang.org/x/arch/arm64/arm64asm"
-)
-
-func fn() {
-}
-
-func fn2() {
-	fn()
-}
-
-func IsGCFlagsSet() bool {
-	asm := unsafe.Slice((*byte)(unsafe.Pointer(reflect.ValueOf(fn2).Pointer())), 1000)
-
-	flag := false
-	pos := 0
-	for pos < len(asm) {
-		inst, _ := arm64asm.Decode(asm[pos:])
-		if inst.Op == arm64asm.RET {
-			break
-		}
-		if inst.Op == arm64asm.BL {
-			flag = true
-			break
-		}
-		pos += int(unsafe.Sizeof(inst.Enc))
-	}
-	return flag
-}
+TEXT ·usleepTrampoline(SB),NOSPLIT,$8
+	MOVWU	usec+0(FP), A0
+	MOV	pc+8(FP), T0
+	MOVW	A0, usec-8(SP)
+	JALR	RA, T0
+	RET

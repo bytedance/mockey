@@ -24,9 +24,10 @@ import (
 )
 
 type mockerInstance interface {
-	key() uintptr
+	identityKey() uintptr
+	layerKey() uintptr
 	name() string
-	unPatch()
+	unPatchLocked()
 
 	caller() tool.CallerInfo
 }
@@ -45,14 +46,19 @@ type MockerVar struct {
 func MockValue(targetPtr interface{}) *MockerVar {
 	tool.AssertPtr(targetPtr)
 
+	target := reflect.ValueOf(targetPtr).Elem()
 	return &MockerVar{
-		target:     reflect.ValueOf(targetPtr).Elem(),
-		origin:     reflect.ValueOf(targetPtr).Elem().Interface(),
-		targetType: reflect.TypeOf(targetPtr).Elem(),
+		target:     target,
+		targetType: target.Type(),
 	}
 }
 
 func (mocker *MockerVar) To(value interface{}) *MockerVar {
+	mockLifecycleMu.Lock()
+	defer mockLifecycleMu.Unlock()
+	mocker.lock.Lock()
+	defer mocker.lock.Unlock()
+
 	var v reflect.Type
 
 	if value == nil {
@@ -64,43 +70,63 @@ func (mocker *MockerVar) To(value interface{}) *MockerVar {
 	}
 
 	tool.Assert(v.AssignableTo(mocker.targetType), "value type: %s not match target type: %s", v.Name(), mocker.targetType.Name())
-	mocker.Patch()
+	mocker.patchValueLocked()
 	return mocker
 }
 
 func (mocker *MockerVar) Patch() *MockerVar {
+	mockLifecycleMu.Lock()
+	defer mockLifecycleMu.Unlock()
 	mocker.lock.Lock()
 	defer mocker.lock.Unlock()
+	mocker.patchValueLocked()
+	return mocker
+}
 
-	if !mocker.isPatched {
-		mocker.target.Set(mocker.hook)
-		mocker.isPatched = true
-		addToGlobal(mocker)
-
-		mocker.outerCaller = tool.OuterCaller()
+func (mocker *MockerVar) patchValueLocked() {
+	if mocker.isPatched {
+		return
 	}
 
-	return mocker
+	assertNotInGlobal(mocker)
+	mocker.origin = mocker.target.Interface()
+	mocker.target.Set(mocker.hook)
+	mocker.isPatched = true
+	addToGlobal(mocker)
+	mocker.outerCaller = tool.OuterCaller()
 }
 
 func (mocker *MockerVar) UnPatch() *MockerVar {
-	mocker.lock.Lock()
-	defer mocker.lock.Unlock()
-	if mocker.isPatched {
-		mocker.isPatched = false
-		if mocker.origin == nil {
-			mocker.target.Set(reflect.Zero(mocker.targetType))
-		} else {
-			mocker.target.Set(reflect.ValueOf(mocker.origin))
-		}
-		removeFromGlobal(mocker)
-	}
-
+	mockLifecycleMu.Lock()
+	defer mockLifecycleMu.Unlock()
+	mocker.unPatchLocked()
 	return mocker
 }
 
-func (mocker *MockerVar) key() uintptr {
+func (mocker *MockerVar) unPatchLocked() {
+	mocker.lock.Lock()
+	defer mocker.lock.Unlock()
+	if !mocker.isPatched {
+		return
+	}
+
+	assertTopInGlobal(mocker)
+	if mocker.origin == nil {
+		mocker.target.Set(reflect.Zero(mocker.targetType))
+	} else {
+		mocker.target.Set(reflect.ValueOf(mocker.origin))
+	}
+	mocker.isPatched = false
+	removeFromGlobal(mocker)
+	mocker.origin = nil
+}
+
+func (mocker *MockerVar) identityKey() uintptr {
 	return mocker.target.Addr().Pointer()
+}
+
+func (mocker *MockerVar) layerKey() uintptr {
+	return mocker.identityKey()
 }
 
 func (mocker *MockerVar) name() string {
@@ -108,10 +134,6 @@ func (mocker *MockerVar) name() string {
 		return "<string Value>"
 	}
 	return mocker.target.String()
-}
-
-func (mocker *MockerVar) unPatch() {
-	mocker.UnPatch()
 }
 
 func (mocker *MockerVar) caller() tool.CallerInfo {

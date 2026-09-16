@@ -41,6 +41,7 @@ type Mocker struct {
 	times     int64
 	mockTimes int64
 	patch     *monkey.Patch
+	patchKey  uintptr
 	lock      sync.Mutex
 	isPatched bool
 	builder   *MockBuilder
@@ -199,9 +200,33 @@ func (builder *MockBuilder) FilterGoRoutine(filter FilterGoroutineType, gId int6
 }
 
 func (builder *MockBuilder) Build() *Mocker {
+	mockLifecycleMu.Lock()
+	defer mockLifecycleMu.Unlock()
+
 	mocker := Mocker{builder: builder}
+	mocker.target = reflect.ValueOf(builder.target)
+	mocker.patchKey = builder.analyzer.RuntimeTargetValue().Pointer()
+	assertNotInGlobal(&mocker)
+
+	var origin, previousOrigin reflect.Value
+	if builder.originPtr != nil {
+		origin = reflect.ValueOf(builder.originPtr).Elem()
+		if origin.IsValid() {
+			previousOrigin = reflect.New(origin.Type()).Elem()
+			previousOrigin.Set(origin)
+		}
+	}
+	complete := false
+	defer func() {
+		if complete || !origin.IsValid() || mocker.patch != nil || monkey.IsPatchTargetPoisoned(mocker.patchKey) {
+			return
+		}
+		origin.Set(previousOrigin)
+	}()
+
 	mocker.build()
-	mocker.Patch()
+	mocker.patchLocked()
+	complete = true
 	return &mocker
 }
 
@@ -296,37 +321,54 @@ func (mocker *Mocker) build() {
 }
 
 func (mocker *Mocker) Patch() *Mocker {
+	mockLifecycleMu.Lock()
+	defer mockLifecycleMu.Unlock()
+	return mocker.patchLocked()
+}
+
+func (mocker *Mocker) patchLocked() *Mocker {
 	mocker.lock.Lock()
 	defer mocker.lock.Unlock()
 	if mocker.isPatched {
 		return mocker
 	}
+
 	runtimeTarget := mocker.builder.analyzer.RuntimeTargetValue()
+	mocker.patchKey = runtimeTarget.Pointer()
+	assertNotInGlobal(mocker)
 	mocker.patch = monkey.PatchValue(runtimeTarget, mocker.hook, mocker.proxy, mocker.builder.unsafe)
 	mocker.isPatched = true
 	addToGlobal(mocker)
-
 	mocker.outerCaller = tool.OuterCaller()
 	return mocker
 }
 
 func (mocker *Mocker) UnPatch() *Mocker {
+	mockLifecycleMu.Lock()
+	defer mockLifecycleMu.Unlock()
+	mocker.unPatchLocked()
+	return mocker
+}
+
+func (mocker *Mocker) unPatchLocked() {
 	mocker.lock.Lock()
 	defer mocker.lock.Unlock()
 	if !mocker.isPatched {
-		return mocker
+		return
 	}
+
+	assertTopInGlobal(mocker)
 	mocker.patch.Unpatch()
 	mocker.isPatched = false
 	removeFromGlobal(mocker)
 	atomic.StoreInt64(&mocker.times, 0)
 	atomic.StoreInt64(&mocker.mockTimes, 0)
-
-	return mocker
 }
 
 func (mocker *Mocker) Release() *MockBuilder {
-	mocker.UnPatch()
+	mockLifecycleMu.Lock()
+	defer mockLifecycleMu.Unlock()
+	mocker.unPatchLocked()
 	mocker.builder.resetCondition()
 	return mocker.builder
 }
@@ -380,10 +422,12 @@ func (mocker *Mocker) Origin(funcPtr interface{}) *Mocker {
 }
 
 func (mocker *Mocker) rePatch(do func()) *Mocker {
-	mocker.UnPatch()
+	mockLifecycleMu.Lock()
+	defer mockLifecycleMu.Unlock()
+	mocker.unPatchLocked()
 	do()
 	mocker.build()
-	mocker.Patch()
+	mocker.patchLocked()
 	return mocker
 }
 
@@ -403,16 +447,16 @@ func (mocker *Mocker) MockTimes() int {
 	return int(atomic.LoadInt64(&mocker.mockTimes))
 }
 
-func (mocker *Mocker) key() uintptr {
+func (mocker *Mocker) identityKey() uintptr {
 	return mocker.target.Pointer()
+}
+
+func (mocker *Mocker) layerKey() uintptr {
+	return mocker.patchKey
 }
 
 func (mocker *Mocker) name() string {
 	return mocker.target.String()
-}
-
-func (mocker *Mocker) unPatch() {
-	mocker.UnPatch()
 }
 
 func (mocker *Mocker) caller() tool.CallerInfo {

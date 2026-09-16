@@ -1,10 +1,10 @@
 module github.com/bytedance/mockey
 
-go 1.18
+go 1.24.0
 
 require (
 	github.com/smartystreets/goconvey v1.7.2
-	golang.org/x/arch v0.11.0
+	golang.org/x/arch v0.23.0
 	golang.org/x/sys v0.26.0
 )
 

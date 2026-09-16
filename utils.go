@@ -91,7 +91,7 @@ func getMethod(val reflect.Value, methodName string, opts *methodOption) (method
 	}
 
 	// check ptr type for exported or unexported method
-	ptrType := reflect.PtrTo(typ)
+	ptrType := reflect.PointerTo(typ)
 	if m, ok := ptrType.MethodByName(methodName); ok {
 		return m.Func, true
 	}
@@ -177,7 +177,7 @@ func getNestedMethod(val reflect.Value, methodName string) (reflect.Method, bool
 	if m, ok := typ.MethodByName(methodName); ok {
 		return m, true
 	}
-	return reflect.PtrTo(typ).MethodByName(methodName)
+	return reflect.PointerTo(typ).MethodByName(methodName)
 }
 
 // unexportedMethodByName resolve an unexported method from an instance

@@ -95,9 +95,12 @@ func TestWin(t *testing.T) {
 ### Arch Support 
 - AMD64
 - ARM64
+- RISC-V64 (Linux)
 
 ### Version Support 
-- Go 1.13+
+- Go 1.24+
+- For Go 1.23 and earlier, use Mockey v1.4.6.
+- Linux/RISC-V64 requires Go 1.26+
 
 ## Basic Features
 ### Simple function/method

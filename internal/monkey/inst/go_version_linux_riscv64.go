@@ -1,3 +1,6 @@
+//go:build linux && riscv64 && !go1.26
+// +build linux,riscv64,!go1.26
+
 /*
  * Copyright 2022 ByteDance Inc.
  *
@@ -14,37 +17,6 @@
  * limitations under the License.
  */
 
-package tool
+package inst
 
-import (
-	"reflect"
-	"unsafe"
-
-	"golang.org/x/arch/arm64/arm64asm"
-)
-
-func fn() {
-}
-
-func fn2() {
-	fn()
-}
-
-func IsGCFlagsSet() bool {
-	asm := unsafe.Slice((*byte)(unsafe.Pointer(reflect.ValueOf(fn2).Pointer())), 1000)
-
-	flag := false
-	pos := 0
-	for pos < len(asm) {
-		inst, _ := arm64asm.Decode(asm[pos:])
-		if inst.Op == arm64asm.RET {
-			break
-		}
-		if inst.Op == arm64asm.BL {
-			flag = true
-			break
-		}
-		pos += int(unsafe.Sizeof(inst.Enc))
-	}
-	return flag
-}
+var _ = mockey_linux_riscv64_requires_go1_26
