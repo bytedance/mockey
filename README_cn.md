@@ -101,6 +101,7 @@ func TestWin(t *testing.T) {
 
 ### 版本支持
 - Go 1.24+
+- Go 1.23 及更早版本请使用 Mockey v1.4.6。
 - Linux/RISC-V64 需要 Go 1.26+
 
 ## 基础特性
