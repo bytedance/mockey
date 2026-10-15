@@ -1,5 +1,5 @@
-//go:build race
-// +build race
+//go:build race && !go1.27
+// +build race,!go1.27
 
 /*
  * Copyright 2022 ByteDance Inc.
