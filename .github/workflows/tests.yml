@@ -18,14 +18,7 @@ jobs:
             "1.25",
             "1.27",
           ]
-        os: [linux] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
-        arch: [X64, ARM64]
-        exclude:
-          - os: Linux
-            arch: ARM64
-          - os: Windows
-            arch: ARM64
-    runs-on: ["${{ matrix.os }}", "${{ matrix.arch }}"]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go
@@ -47,14 +40,7 @@ jobs:
           "1.17",
           "1.26" # go1.26 has fatal issues with -race 
           ]
-        os: [linux] # should be [ macOS, linux, windows ], but currently we don't have macOS and windows runners
-        arch: [X64, ARM64]
-        exclude:
-          - os: Linux
-            arch: ARM64
-          - os: Windows
-            arch: ARM64
-    runs-on: ["${{ matrix.os }}", "${{ matrix.arch }}"]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: Set up Go
