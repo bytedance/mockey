@@ -856,3 +856,86 @@ func TestConcurrentOwnersRejectSharedGenericGCShape(t *testing.T) {
 		t.Fatalf("second generic result after cleanup = %p, want nil", secondAfterCleanup)
 	}
 }
+
+// registrySize reports how many entries the global mock registry is holding.
+// Every one of these maps must be empty once all mocks are unpatched;
+// a non-zero count means a mocker outlived its patch and leaked.
+func registrySize() map[string]int {
+	mockRegistryMu.Lock()
+	defer mockRegistryMu.Unlock()
+	return map[string]int{
+		"rootScope.byIdentity": len(rootMockScope.byIdentity),
+		"rootScope.order":      len(rootMockScope.order),
+		"scopesByGoroutine":    len(mockScopesByGoroutine),
+		"scopeByInstance":      len(mockScopeByInstance),
+		"ownerByInstance":      len(mockOwnerByInstance),
+		"layersByPatchKey":     len(mockLayersByPatchKey),
+	}
+}
+
+func assertRegistryEmpty(t *testing.T, stage string) {
+	t.Helper()
+	for name, size := range registrySize() {
+		if size != 0 {
+			t.Errorf("%s: registry map %q still holds %d entries; unpatching must remove them", stage, name, size)
+		}
+	}
+}
+
+// Issue #124 reports that unpatching restores behaviour but leaves entries
+// behind in the global registry. The existing UnPatchAll tests only check that
+// the mocked functions behave normally again, which passes even if the
+// bookkeeping leaks, so this test asserts on the registry itself.
+func TestUnPatchAllLeavesNoRegistryEntries(t *testing.T) {
+	UnPatchAll()
+	assertRegistryEmpty(t, "before test")
+
+	// Root scope: mocks created outside any PatchRun.
+	Mock(Fun1).Return(true).Build()
+	Mock(Fun2).Return(true).Build()
+	if !Fun1() || !Fun2() {
+		t.Fatal("root-scope mocks were not applied")
+	}
+	if size := registrySize()["rootScope.order"]; size != 2 {
+		t.Fatalf("expected 2 root mocks to be registered, got %d", size)
+	}
+
+	UnPatchAll()
+	if Fun1() || Fun2() {
+		t.Error("original functions were not restored")
+	}
+	assertRegistryEmpty(t, "after root UnPatchAll")
+
+	// Scoped: PatchRun must clean up its own scope on exit.
+	PatchRun(func() {
+		Mock(Fun1).Return(true).Build()
+		if !Fun1() {
+			t.Error("scoped mock was not applied")
+		}
+	})
+	if Fun1() {
+		t.Error("PatchRun did not restore the original function")
+	}
+	assertRegistryEmpty(t, "after PatchRun exit")
+
+	// Explicit UnPatchAll inside a scope, then scope exit.
+	PatchRun(func() {
+		Mock(Fun1).Return(true).Build()
+		Mock(Fun2).Return(true).Build()
+		UnPatchAll()
+		if Fun1() || Fun2() {
+			t.Error("UnPatchAll inside PatchRun did not restore functions")
+		}
+	})
+	assertRegistryEmpty(t, "after in-scope UnPatchAll and exit")
+
+	// Repeated patch/unpatch of the same target must not accumulate entries.
+	for i := 0; i < 20; i++ {
+		Mock(Fun1).Return(true).Build()
+		UnPatchAll()
+	}
+	if Fun1() {
+		t.Error("original function not restored after repeated cycles")
+	}
+	assertRegistryEmpty(t, "after 20 patch/unpatch cycles")
+}
