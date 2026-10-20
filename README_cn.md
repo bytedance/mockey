@@ -181,6 +181,22 @@ func main() {
 }
 ```
 
+对于 Go 1.27 中声明自身类型参数的方法，请显式使用 `MockGeneric`，也可以使用 `Mock(target, OptGeneric)` 或 `Mock(target, OptMethod)`，同时指定两个选项仍受支持。应用的 `go.mod` 需要声明 Go 1.27 或更高版本，或者在测试文件中添加 `//go:build go1.27` 约束。
+
+```go
+type Service struct{}
+
+func (s *Service) Echo[T any](value T) T { return value }
+
+func main() {
+	mock := MockGeneric((*Service).Echo[int]).Return(42).Build()
+	defer mock.UnPatch()
+	fmt.Println(new(Service).Echo[int](1)) // 42
+}
+```
+
+请传入方法声明所在接收器的方法表达式：值接收器使用 `Service.Echo[int]`，指针接收器使用 `(*Service).Echo[int]`。这会复用现有的泛型字典探测和接收器参数适配机制，hook 和 `Origin` 均可包含或省略接收器参数。此支持范围不包括不传选项的 `Mock(target)` 自动识别、`service.Echo[int]` 这样的绑定方法值，以及通过嵌入字段提升的方法表达式。
+
 另外，Golang 泛型对于同底层类型的不同类型，其泛型实现是共用的。比如 `type MyString string` 中 `MyString` 和 `string` 的实现是一套。因此对于其中一种类型的 mock 会干扰另一种类型。
 ```go
 package main
