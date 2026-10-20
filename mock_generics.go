@@ -18,8 +18,18 @@ package mockey
 
 import "github.com/bytedance/mockey/internal/fn"
 
-// MockGeneric mocks generic function. Target must be generic method or method of generic types
-// From go1.20, Mock can automatically judge whether the target is generic or not.
+// MockGeneric mocks a generic function or method.
+// From Go 1.20, Mock can automatically recognize generic functions and methods
+// of generic receiver types.
+// For Go 1.27 methods with their own type parameters, pass the declaring receiver's
+// method expression explicitly, for example:
+//
+//	MockGeneric((*Service).Echo[int]).Return(42).Build()
+//
+// This uses the existing generic dictionary probe and receiver argument adapters.
+// Mock(target, OptGeneric) and Mock(target, OptMethod) also support these method
+// expressions. Automatic recognition without an option, bound method values and
+// promoted method expressions are not supported for these methods.
 func MockGeneric(target interface{}, opt ...mockOptionFn) *MockBuilder {
 	return Mock(target, append(opt, OptGeneric)...)
 }

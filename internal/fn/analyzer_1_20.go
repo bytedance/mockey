@@ -56,6 +56,7 @@ func (a *AnalyzerImpl) init() *AnalyzerImpl {
 	a.targetValue, a.targetType = reflect.ValueOf(a.target), reflect.TypeOf(a.target)
 	tool.DebugPrintf("[Analyzer.init] targetType: %v, targetValue: 0x%x\n", a.targetType, a.targetValue.Pointer())
 	a.generic, a.method = a.isGeneric0(), a.isMethod0()
+	a.initGenericMethod()
 	a.runtimeTargetType = a.runtimeTargetType0()
 	a.runtimeTargetValue, a.runtimeGenericInfo = a.runtimeTargetValueAndGenericInfo0()
 	tool.DebugPrintf("[Analyzer.init] analyze finish, generic: %v, method: %v, runtimeTargetType: %v, runtimeTargetValue: 0x%x, runtimeGenericInfo: 0x%x\n", a.generic, a.method, a.runtimeTargetType, a.runtimeTargetValue.Pointer(), a.runtimeGenericInfo)

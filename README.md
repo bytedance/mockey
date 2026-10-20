@@ -179,6 +179,22 @@ func main() {
 }
 ```
 
+For Go 1.27 methods that declare their own type parameters, use `MockGeneric` explicitly. `Mock(target, OptGeneric)` or `Mock(target, OptMethod)` also works; specifying both options remains supported. Use Go 1.27 or later in your application's `go.mod`, or a `//go:build go1.27` constraint on the test file.
+
+```go
+type Service struct{}
+
+func (s *Service) Echo[T any](value T) T { return value }
+
+func main() {
+	mock := MockGeneric((*Service).Echo[int]).Return(42).Build()
+	defer mock.UnPatch()
+	fmt.Println(new(Service).Echo[int](1)) // 42
+}
+```
+
+Pass the declaring receiver's method expression (`Service.Echo[int]` for a value receiver, or `(*Service).Echo[int]` for a pointer receiver). This reuses the existing generic dictionary probe and receiver argument adapters; hooks and `Origin` may include or omit the receiver. Automatic recognition by `Mock(target)` without an option, bound method values such as `service.Echo[int]`, and promoted method expressions are outside this support.
+
 Additionally, Golang generics share implementation for different types with the same underlying type. For example, in `type MyString string`, `MyString` and `string` share one implementation. Therefore, mocking one type will interfere with the other.
 ```go
 package main
