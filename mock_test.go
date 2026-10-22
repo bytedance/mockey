@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -439,6 +440,54 @@ func TestMockOrigin(t *testing.T) {
 		So((&foo{1}).Foo(), ShouldEqual, 2)
 		So((&foo{2}).Foo(), ShouldEqual, 3)
 		So((&foo{3}).Foo(), ShouldEqual, 4)
+	})
+}
+
+type originReceiver struct{ id int }
+
+//go:noinline
+func (r *originReceiver) value(arg int) int { return r.id + arg }
+
+func TestMockOriginUsesInvocationReceiver(t *testing.T) {
+	t.Run("concurrent", func(t *testing.T) {
+		var origin func(int) int
+		firstEntered := make(chan struct{})
+		resumeFirst := make(chan struct{})
+		var calls atomic.Int32
+		m := Mock((*originReceiver).value).To(func(arg int) int {
+			if calls.Add(1) == 1 {
+				close(firstEntered)
+				<-resumeFirst
+			}
+			return origin(arg)
+		}).Origin(&origin).Build()
+		defer m.UnPatch()
+
+		firstResult := make(chan int, 1)
+		go func() { firstResult <- (&originReceiver{id: 1}).value(0) }()
+		<-firstEntered
+		second := (&originReceiver{id: 2}).value(0)
+		close(resumeFirst)
+		first := <-firstResult
+		if first != 1 || second != 2 {
+			t.Fatalf("concurrent origin results = (%d, %d), want (1, 2)", first, second)
+		}
+	})
+
+	t.Run("nested", func(t *testing.T) {
+		var origin func(int) int
+		m := Mock((*originReceiver).value).To(func(arg int) int {
+			if arg == 1 {
+				return (&originReceiver{id: 2}).value(2) + origin(arg)
+			}
+			return origin(arg)
+		}).Origin(&origin).Build()
+		defer m.UnPatch()
+
+		got := (&originReceiver{id: 1}).value(1)
+		if got != 6 {
+			t.Fatalf("nested origin result = %d, want 6", got)
+		}
 	})
 }
 

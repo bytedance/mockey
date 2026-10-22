@@ -102,7 +102,9 @@ func (builder *MockBuilder) resetCondition() *MockBuilder {
 //	 }
 //	 mock2 := Mock(Fun).To(mock).Origin(&origin).Build()
 //
-// Origin only works when call origin hook directly, target will still be mocked in recursive call
+// Origin only works when call origin hook directly, target will still be mocked in recursive call.
+// When the Origin signature omits target-only arguments (such as a method receiver), Mockey
+// infers them from the current invocation. Call the origin in the same goroutine or include them explicitly.
 func (builder *MockBuilder) Origin(funcPtr interface{}) *MockBuilder {
 	tool.Assert(builder.originPtr == nil, "re-set builder origin")
 	return builder.origin(funcPtr)
@@ -234,10 +236,12 @@ func (mocker *Mocker) build() {
 	mocker.target = reflect.ValueOf(mocker.builder.target)
 
 	var (
-		extraArgsGetter func() []reflect.Value
-		originExec      func(args []reflect.Value) []reflect.Value
-		match           []func(args []reflect.Value) bool
-		exec            []func(args []reflect.Value) []reflect.Value
+		originArgsMu          sync.RWMutex
+		originArgsByGoroutine map[int64][]reflect.Value
+		needsExtraArgs        bool
+		originExec            func(args []reflect.Value) []reflect.Value
+		match                 []func(args []reflect.Value) bool
+		exec                  []func(args []reflect.Value) []reflect.Value
 	)
 
 	mocker.proxy = reflect.New(mocker.builder.runtimeTargetType())
@@ -249,9 +253,20 @@ func (mocker *Mocker) build() {
 	if originPtr := mocker.builder.originPtr; originPtr != nil {
 		origin := reflect.ValueOf(originPtr).Elem()
 		originType := reflect.TypeOf(originPtr).Elem()
+		needsExtraArgs = originType.NumIn() != mocker.builder.analyzer.RuntimeTargetType().NumIn()
+		if needsExtraArgs {
+			originArgsByGoroutine = make(map[int64][]reflect.Value)
+		}
 		adapter := mocker.builder.analyzer.ReversedInputAdapter("origin", originType)
 		origin.Set(reflect.MakeFunc(originType, func(args []reflect.Value) []reflect.Value {
-			return tool.ReflectCall(mocker.proxy.Elem(), adapter(args, extraArgsGetter()))
+			var extraArgs []reflect.Value
+			if needsExtraArgs {
+				goroutineID := tool.GetGoroutineID()
+				originArgsMu.RLock()
+				extraArgs = originArgsByGoroutine[goroutineID]
+				originArgsMu.RUnlock()
+			}
+			return tool.ReflectCall(mocker.proxy.Elem(), adapter(args, extraArgs))
 		}))
 	}
 
@@ -278,9 +293,21 @@ func (mocker *Mocker) build() {
 	}
 
 	mockerHook := reflect.MakeFunc(mocker.builder.runtimeTargetType(), func(args []reflect.Value) []reflect.Value {
-		if mocker.builder.originPtr != nil {
-			// Origin call need extra args, which only can be obtained during the execution of mockerHook.
-			extraArgsGetter = func() []reflect.Value { return args }
+		if needsExtraArgs {
+			goroutineID := tool.GetGoroutineID()
+			originArgsMu.Lock()
+			previousArgs, hadPreviousArgs := originArgsByGoroutine[goroutineID]
+			originArgsByGoroutine[goroutineID] = args
+			originArgsMu.Unlock()
+			defer func() {
+				originArgsMu.Lock()
+				if hadPreviousArgs {
+					originArgsByGoroutine[goroutineID] = previousArgs
+				} else {
+					delete(originArgsByGoroutine, goroutineID)
+				}
+				originArgsMu.Unlock()
+			}()
 		}
 
 		// Check if the currently called generic function instance matches the mocked generic function
