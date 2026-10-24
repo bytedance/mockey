@@ -251,7 +251,12 @@ func (mocker *Mocker) build() {
 		originType := reflect.TypeOf(originPtr).Elem()
 		adapter := mocker.builder.analyzer.ReversedInputAdapter("origin", originType)
 		origin.Set(reflect.MakeFunc(originType, func(args []reflect.Value) []reflect.Value {
-			return tool.ReflectCall(mocker.proxy.Elem(), adapter(args, extraArgsGetter()))
+			guard := tool.NewStackGuard()
+			in := adapter(args, extraArgsGetter())
+			guard.Fix(in)
+			out := tool.ReflectCall(mocker.proxy.Elem(), in)
+			guard.Fix(out)
+			return out
 		}))
 	}
 
@@ -277,19 +282,34 @@ func (mocker *Mocker) build() {
 		}
 	}
 
-	mockerHook := reflect.MakeFunc(mocker.builder.runtimeTargetType(), func(args []reflect.Value) []reflect.Value {
+	mockerHook := reflect.MakeFunc(mocker.builder.runtimeTargetType(), func(args []reflect.Value) (out []reflect.Value) {
+		// args live on the heap but may point into the caller's stack frame (see
+		// tool.StackGuard). Re-validate them before every reflect call that
+		// consumes them, validate the results before handing them back, and
+		// drop the stack references once the hook is done.
+		guard := tool.NewStackGuard()
+		defer func() {
+			guard.Fix(out)
+			guard.Release(args)
+		}()
+
 		if mocker.builder.originPtr != nil {
 			// Origin call need extra args, which only can be obtained during the execution of mockerHook.
-			extraArgsGetter = func() []reflect.Value { return args }
+			extraArgsGetter = func() []reflect.Value {
+				guard.Fix(args)
+				return args
+			}
 		}
 
 		// Check if the currently called generic function instance matches the mocked generic function
 		if analyzer := mocker.builder.analyzer; analyzer.IsGeneric() {
 			genericInfoHook := tool.NewFuncTypeByInsertIn(analyzer.TargetType(), reflect.TypeOf(GenericInfo(0)))
 			genericInfoAdapter := analyzer.InputAdapter("getGenericInfo", genericInfoHook)
+			guard.Fix(args)
 			genericInfo, targetGenericInfo := genericInfoAdapter(args)[0].Interface().(GenericInfo), analyzer.GenericInfo()
 			if genericInfo != targetGenericInfo {
 				tool.DebugPrintf("genericInfo mismatch: genericInfo: 0x%x, targetGenericInfo: 0x%x\n", genericInfo, targetGenericInfo)
+				guard.Fix(args)
 				return originExec(args)
 			}
 		}
@@ -300,21 +320,26 @@ func (mocker *Mocker) build() {
 			break
 		case Include:
 			if tool.GetGoroutineID() != mocker.builder.gId {
+				guard.Fix(args)
 				return originExec(args)
 			}
 		case Exclude:
 			if tool.GetGoroutineID() == mocker.builder.gId {
+				guard.Fix(args)
 				return originExec(args)
 			}
 		}
 
 		for i, matchFn := range match {
 			execFn := exec[i]
+			guard.Fix(args)
 			if matchFn(args) {
+				guard.Fix(args)
 				return execFn(args)
 			}
 		}
 
+		guard.Fix(args)
 		return originExec(args)
 	})
 	mocker.hook = mockerHook
