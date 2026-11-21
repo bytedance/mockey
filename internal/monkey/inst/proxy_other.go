@@ -43,7 +43,25 @@ func BuildPatch(targetAddr, proxyAddr, hookAddr uintptr, code []byte) (proxy, ta
 	return BuildProxy(targetAddr, proxyAddr, code), BranchInto(hookAddr)
 }
 
+// BuildProxy copies the first instructions of the target into the proxy and
+// jumps back to the rest of the target. A direct branch in the copied code is
+// PC-relative, so if it leaves the copied code (for example the stack check's
+// jump to the morestack call at the end of a Go function) it would land in the
+// proxy page instead of the target. Such branches are redirected to absolute
+// jumps appended to the proxy.
 func BuildProxy(targetAddr, _ uintptr, code []byte) []byte {
-	proxy := append([]byte(nil), code...)
-	return append(proxy, BranchTo(targetAddr+uintptr(len(code)))...)
+	proxy, branches := relocateBranches(targetAddr, code)
+	proxy = append(proxy, BranchTo(targetAddr+uintptr(len(code)))...)
+	for _, branch := range branches {
+		setBranchTarget(proxy, branch.pos, len(proxy))
+		proxy = append(proxy, BranchTo(branch.target)...)
+	}
+	return proxy
+}
+
+// proxyBranch is a direct branch in the proxy whose destination lies outside
+// the copied code.
+type proxyBranch struct {
+	pos    int     // offset of the branch instruction in the proxy
+	target uintptr // absolute destination of the branch in the target
 }
